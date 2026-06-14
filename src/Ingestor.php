@@ -7,11 +7,16 @@ namespace Ivanfuhr\Ingestor;
 use InvalidArgumentException;
 use LogicException;
 use Throwable;
+use Generator;
 use Ivanfuhr\Ingestor\Context\ArrayContext;
+use Ivanfuhr\Ingestor\Contract\Context;
 use Ivanfuhr\Ingestor\Contract\Definition;
+use Ivanfuhr\Ingestor\Contract\Failure;
 use Ivanfuhr\Ingestor\Contract\PersistenceDriver;
 use Ivanfuhr\Ingestor\Contract\Preparable;
 use Ivanfuhr\Ingestor\Contract\SourceDriver;
+use Ivanfuhr\Ingestor\Contract\ValidatesRows;
+use Ivanfuhr\Ingestor\Validation\Severity;
 
 final class Ingestor
 {
@@ -66,8 +71,16 @@ final class Ingestor
 
         $stage = $this->persistence->begin($this->definition, $context);
 
+        /** @var list<Failure> $errors */
+        $errors = [];
+
         try {
             $rows = $this->source->read($this->importSource);
+
+            if ($this->definition instanceof ValidatesRows) {
+                $rows = $this->validatedRows($this->definition, $rows, $context, $errors);
+            }
+
             $this->persistence->ingest($stage, $rows);
         } catch (Throwable $throwable) {
             $this->persistence->rollback($stage);
@@ -75,6 +88,35 @@ final class Ingestor
             throw $throwable;
         }
 
-        return new ImportResult($this->persistence, $stage);
+        return new ImportResult($this->persistence, $stage, $errors);
+    }
+
+    /**
+     * @param iterable<int, array<string, mixed>> $rows
+     * @param list<Failure> $errors
+     *
+     * @return Generator<int, array<string, mixed>>
+     */
+    private function validatedRows(
+        ValidatesRows $definition,
+        iterable $rows,
+        Context $context,
+        array &$errors,
+    ): Generator {
+        foreach ($rows as $row) {
+            $hasError = false;
+
+            foreach ($definition->validate($row, $context) as $failure) {
+                $errors[] = $failure;
+
+                if ($failure->severity() === Severity::ERROR) {
+                    $hasError = true;
+                }
+            }
+
+            if (!$hasError) {
+                yield $row;
+            }
+        }
     }
 }

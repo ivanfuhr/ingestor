@@ -348,32 +348,36 @@ final class PostgresStagingIngestor
 
     private function conflictClause(string $table, ConflictStrategy $conflictStrategy): string
     {
-        $cacheKey = $table . "\0" . $conflictStrategy->type()->name . "\0" . $conflictStrategy->column();
+        $cacheKey = $table . "\0" . $conflictStrategy->type()->name . "\0" . implode("\0", $conflictStrategy->columns());
 
         if (isset($this->conflictClauseCache[$cacheKey])) {
             return $this->conflictClauseCache[$cacheKey];
         }
 
-        $conflictColumn = $this->identifiers->quote($conflictStrategy->column());
+        $conflictColumns = implode(', ', array_map(
+            $this->identifiers->quote(...),
+            $conflictStrategy->columns(),
+        ));
         $tableColumns = $this->introspection->columns($table);
+        $conflictColumnSet = array_fill_keys($conflictStrategy->columns(), true);
 
         $clause = match ($conflictStrategy->type()) {
-            ConflictType::Ignore => sprintf(' ON CONFLICT (%s) DO NOTHING', $conflictColumn),
+            ConflictType::Ignore => sprintf(' ON CONFLICT (%s) DO NOTHING', $conflictColumns),
             ConflictType::Update => sprintf(
                 ' ON CONFLICT (%s) DO UPDATE SET %s',
-                $conflictColumn,
+                $conflictColumns,
                 implode(', ', array_map(
                     fn (string $column): string => sprintf(
                         '%s = EXCLUDED.%s',
                         $this->identifiers->quote($column),
                         $this->identifiers->quote($column),
                     ),
-                    array_filter($tableColumns, static fn (string $column): bool => $column !== $conflictStrategy->column()),
+                    array_filter($tableColumns, static fn (string $column): bool => !isset($conflictColumnSet[$column])),
                 )),
             ),
             ConflictType::Replace => sprintf(
                 ' ON CONFLICT (%s) DO UPDATE SET %s',
-                $conflictColumn,
+                $conflictColumns,
                 implode(', ', array_map(
                     fn (string $column): string => sprintf(
                         '%s = EXCLUDED.%s',

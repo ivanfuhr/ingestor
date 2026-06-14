@@ -14,7 +14,10 @@ enum ConflictType
 
 interface ConflictStrategy
 {
-    public function column(): string;
+    /**
+     * @return non-empty-list<string>
+     */
+    public function columns(): array;
 
     public function type(): ConflictType;
 }

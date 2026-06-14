@@ -125,6 +125,59 @@ CSV);
     }
 
     #[Test]
+    public function it_updates_existing_rows_on_composite_conflict(): void
+    {
+        $this->pdo->exec('DROP TABLE IF EXISTS customer_identities CASCADE');
+        $this->pdo->exec(<<<'SQL'
+CREATE TABLE customer_identities (
+    cpf TEXT NOT NULL,
+    rg TEXT NOT NULL,
+    name TEXT NOT NULL,
+    PRIMARY KEY (cpf, rg)
+)
+SQL);
+        $this->pdo->exec("INSERT INTO customer_identities (cpf, rg, name) VALUES ('111', 'AA', 'Old Name')");
+
+        $definition = new class () implements Definition {
+            public function schema(): Schema
+            {
+                return Schema::make()
+                    ->dataset('customer_identities')
+                        ->using(PrefilledStage::class)
+                        ->onConflict(UpdateOnConflict::by('cpf', 'rg'));
+            }
+
+            public function map(array $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('customer_identities', [
+                    'cpf' => $row['cpf'],
+                    'rg' => $row['rg'],
+                    'name' => $row['name'],
+                ]);
+            }
+        };
+
+        $csv = $this->createCsv("cpf,rg,name\n111,AA,New Name\n222,BB,Another\n");
+
+        $ingestor = new Ingestor(new PostgresDriver($this->pdo), new CsvDriver());
+
+        $ingestor
+            ->for($definition::class)
+            ->from($csv)
+            ->import()
+            ->release();
+
+        $rows = $this->pdo->query('SELECT cpf, rg, name FROM customer_identities ORDER BY cpf, rg')->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->assertSame([
+            ['cpf' => '111', 'rg' => 'AA', 'name' => 'New Name'],
+            ['cpf' => '222', 'rg' => 'BB', 'name' => 'Another'],
+        ], $rows);
+
+        $this->pdo->exec('DROP TABLE IF EXISTS customer_identities CASCADE');
+    }
+
+    #[Test]
     public function it_inserts_rows_in_chunks(): void
     {
         $definition = new class () implements Definition {

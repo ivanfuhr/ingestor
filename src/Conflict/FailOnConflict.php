@@ -6,19 +6,22 @@ namespace Ivanfuhr\Ingestor\Conflict;
 
 final readonly class FailOnConflict implements ConflictStrategy
 {
+    /**
+     * @param non-empty-list<string> $columns
+     */
     private function __construct(
-        private string $column,
+        private array $columns,
     ) {
     }
 
-    public static function by(string $column): self
+    public static function by(string ...$columns): self
     {
-        return new self($column);
+        return new self(ConflictColumns::from(...$columns));
     }
 
-    public function column(): string
+    public function columns(): array
     {
-        return $this->column;
+        return $this->columns;
     }
 
     public function type(): ConflictType

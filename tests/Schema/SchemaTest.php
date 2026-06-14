@@ -29,7 +29,7 @@ final class SchemaTest extends TestCase
 
         $this->assertArrayHasKey('customers', $datasets);
         $this->assertInstanceOf(PrefilledStage::class, $datasets['customers']->stageStrategy);
-        $this->assertSame('document', $datasets['customers']->conflictStrategy?->column());
+        $this->assertSame(['document'], $datasets['customers']->conflictStrategy?->columns());
 
         $this->assertArrayHasKey('addresses', $datasets);
         $this->assertInstanceOf(EmptyStage::class, $datasets['addresses']->stageStrategy);

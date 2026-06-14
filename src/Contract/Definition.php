@@ -14,5 +14,5 @@ interface Definition
     /**
      * @param array<string, mixed> $row
      */
-    public function map(array $row): Dataset;
+    public function map(array $row, Context $context): Dataset;
 }

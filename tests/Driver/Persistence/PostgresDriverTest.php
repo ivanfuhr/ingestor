@@ -6,6 +6,7 @@ namespace Ivanfuhr\Ingestor\Tests\Driver\Persistence;
 
 use PDOException;
 use Ivanfuhr\Ingestor\Conflict\UpdateOnConflict;
+use Ivanfuhr\Ingestor\Contract\Context;
 use Ivanfuhr\Ingestor\Contract\Definition;
 use Ivanfuhr\Ingestor\Dataset\Dataset;
 use Ivanfuhr\Ingestor\Driver\Persistence\PostgresDriver;
@@ -51,7 +52,7 @@ final class PostgresDriverTest extends TestCase
                         ->onConflict(UpdateOnConflict::by('document'));
             }
 
-            public function map(array $row): Dataset
+            public function map(array $row, Context $context): Dataset
             {
                 return Dataset::make()->insert('customers', [
                     'document' => $row['cpf'],
@@ -97,7 +98,7 @@ CSV);
                         ->onConflict(UpdateOnConflict::by('document'));
             }
 
-            public function map(array $row): Dataset
+            public function map(array $row, Context $context): Dataset
             {
                 return Dataset::make()->insert('customers', [
                     'document' => $row['cpf'],
@@ -133,7 +134,7 @@ CSV);
                         ->commit();
             }
 
-            public function map(array $row): Dataset
+            public function map(array $row, Context $context): Dataset
             {
                 return Dataset::make()->insert('customers', [
                     'document' => $row['cpf'],
@@ -181,7 +182,7 @@ CSV);
                         ->commit();
             }
 
-            public function map(array $row): Dataset
+            public function map(array $row, Context $context): Dataset
             {
                 return Dataset::make()
                     ->insert('customers', [

@@ -8,7 +8,7 @@ use Ivanfuhr\Ingestor\Stage\Stage;
 
 interface PersistenceDriver
 {
-    public function begin(Definition $definition): Stage;
+    public function begin(Definition $definition, Context $context): Stage;
 
     /**
      * @param iterable<int, array<string, mixed>> $rows

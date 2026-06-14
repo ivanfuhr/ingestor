@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ivanfuhr\Ingestor\Tests\Fixtures;
 
+use Ivanfuhr\Ingestor\Contract\Context;
 use Ivanfuhr\Ingestor\Contract\Definition;
 use Ivanfuhr\Ingestor\Dataset\Dataset;
 use Ivanfuhr\Ingestor\Schema\Schema;
@@ -21,7 +22,7 @@ final class SimpleCustomerImport implements Definition
     /**
      * @param array<string, mixed> $row
      */
-    public function map(array $row): Dataset
+    public function map(array $row, Context $context): Dataset
     {
         return Dataset::make()->insert('customers', $row);
     }

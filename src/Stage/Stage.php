@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Ivanfuhr\Ingestor\Stage;
 
 use InvalidArgumentException;
+use Ivanfuhr\Ingestor\Contract\Context;
 use Ivanfuhr\Ingestor\Contract\Definition;
 
 final readonly class Stage
@@ -16,6 +17,7 @@ final readonly class Stage
         public string $id,
         public Definition $definition,
         public array $stagingTables,
+        public Context $context,
     ) {
     }
 

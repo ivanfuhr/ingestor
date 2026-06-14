@@ -7,8 +7,10 @@ namespace Ivanfuhr\Ingestor;
 use InvalidArgumentException;
 use LogicException;
 use Throwable;
+use Ivanfuhr\Ingestor\Context\ArrayContext;
 use Ivanfuhr\Ingestor\Contract\Definition;
 use Ivanfuhr\Ingestor\Contract\PersistenceDriver;
+use Ivanfuhr\Ingestor\Contract\Preparable;
 use Ivanfuhr\Ingestor\Contract\SourceDriver;
 
 final class Ingestor
@@ -56,7 +58,13 @@ final class Ingestor
             throw new LogicException('A source must be provided via from() before importing.');
         }
 
-        $stage = $this->persistence->begin($this->definition);
+        $context = new ArrayContext();
+
+        if ($this->definition instanceof Preparable) {
+            $this->definition->prepare($context);
+        }
+
+        $stage = $this->persistence->begin($this->definition, $context);
 
         try {
             $rows = $this->source->read($this->importSource);

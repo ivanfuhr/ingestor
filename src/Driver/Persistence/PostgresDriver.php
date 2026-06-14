@@ -7,6 +7,7 @@ namespace Ivanfuhr\Ingestor\Driver\Persistence;
 use InvalidArgumentException;
 use Ivanfuhr\Ingestor\Conflict\ConflictStrategy;
 use Ivanfuhr\Ingestor\Conflict\ConflictType;
+use Ivanfuhr\Ingestor\Contract\Context;
 use Ivanfuhr\Ingestor\Contract\Definition;
 use Ivanfuhr\Ingestor\Contract\PersistenceDriver;
 use Ivanfuhr\Ingestor\Stage\EmptyStage;
@@ -30,7 +31,7 @@ final readonly class PostgresDriver implements PersistenceDriver
         }
     }
 
-    public function begin(Definition $definition): Stage
+    public function begin(Definition $definition, Context $context): Stage
     {
         $stageId = $this->generateStageId();
         $schema = $definition->schema();
@@ -62,7 +63,7 @@ final readonly class PostgresDriver implements PersistenceDriver
             $this->pdo->exec($sql);
         }
 
-        return new Stage($stageId, $definition, $stagingTables);
+        return new Stage($stageId, $definition, $stagingTables, $context);
     }
 
     /**
@@ -74,7 +75,7 @@ final readonly class PostgresDriver implements PersistenceDriver
         $buffers = [];
 
         foreach ($rows as $row) {
-            $dataset = $stage->definition->map($row);
+            $dataset = $stage->definition->map($row, $stage->context);
 
             foreach ($dataset->mutations() as $mutation) {
                 $this->accumulateStagingRow(

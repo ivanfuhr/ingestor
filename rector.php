@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Rector\Config\RectorConfig;
+use Rector\Naming\Rector\Class_\RenamePropertyToMatchTypeRector;
 
 return RectorConfig::configure()
     ->withPaths([
@@ -37,4 +38,8 @@ return RectorConfig::configure()
     ])
     ->withSkip([
         __DIR__ . '/vendor',
+        RenamePropertyToMatchTypeRector::class => [
+            __DIR__ . '/src/Ingestor.php',
+            __DIR__ . '/src/ImportResult.php',
+        ],
     ]);

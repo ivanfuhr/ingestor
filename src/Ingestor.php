@@ -9,6 +9,8 @@ use LogicException;
 use Throwable;
 use Generator;
 use Ivanfuhr\Ingestor\Context\ArrayContext;
+use Ivanfuhr\Ingestor\Contract\AfterImport;
+use Ivanfuhr\Ingestor\Contract\BeforeImport;
 use Ivanfuhr\Ingestor\Contract\Context;
 use Ivanfuhr\Ingestor\Contract\Definition;
 use Ivanfuhr\Ingestor\Contract\Failure;
@@ -66,6 +68,10 @@ final class Ingestor
 
         $context = new ArrayContext();
 
+        if ($this->definition instanceof BeforeImport) {
+            $this->definition->beforeImport($context);
+        }
+
         if ($this->definition instanceof Preparable) {
             $this->definition->prepare($context);
         }
@@ -90,7 +96,13 @@ final class Ingestor
             throw $throwable;
         }
 
-        return new ImportResult($this->persistence, $stage, $failures);
+        $result = new ImportResult($this->persistence, $stage, $failures);
+
+        if ($this->definition instanceof AfterImport) {
+            $this->definition->afterImport($result);
+        }
+
+        return $result;
     }
 
     /**

@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace Ivanfuhr\Ingestor;
 
+use Ivanfuhr\Ingestor\Contract\AfterRelease;
+use Ivanfuhr\Ingestor\Contract\BeforeRelease;
+use Ivanfuhr\Ingestor\Contract\Context;
 use Ivanfuhr\Ingestor\Contract\Failure;
+use Ivanfuhr\Ingestor\Contract\ImportedImport;
 use Ivanfuhr\Ingestor\Contract\PersistenceDriver;
 use Ivanfuhr\Ingestor\Stage\Stage;
 
-final readonly class ImportResult
+final readonly class ImportResult implements ImportedImport
 {
     /**
      * @param list<Failure> $failures
@@ -41,9 +45,24 @@ final readonly class ImportResult
         return $this->failures;
     }
 
+    public function context(): Context
+    {
+        return $this->stage->context;
+    }
+
     public function release(): void
     {
+        $definition = $this->stage->definition;
+
+        if ($definition instanceof BeforeRelease) {
+            $definition->beforeRelease($this);
+        }
+
         $this->persistence->release($this->stage);
+
+        if ($definition instanceof AfterRelease) {
+            $definition->afterRelease(new ReleasedImport($this->stage, $this->failures));
+        }
     }
 
     public function rollback(): void

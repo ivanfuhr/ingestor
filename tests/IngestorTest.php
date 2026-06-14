@@ -5,13 +5,20 @@ declare(strict_types=1);
 namespace Ivanfuhr\Ingestor\Tests;
 
 use Ivanfuhr\Ingestor\Context\ArrayRowContext;
+use Ivanfuhr\Ingestor\Contract\AfterImport;
+use Ivanfuhr\Ingestor\Contract\AfterRelease;
+use Ivanfuhr\Ingestor\Contract\BeforeImport;
+use Ivanfuhr\Ingestor\Contract\BeforeRelease;
 use Ivanfuhr\Ingestor\Contract\Context;
 use Ivanfuhr\Ingestor\Contract\Definition;
+use Ivanfuhr\Ingestor\Contract\ImportedImport;
 use Ivanfuhr\Ingestor\Contract\PersistenceDriver;
 use Ivanfuhr\Ingestor\Contract\Preparable;
+use Ivanfuhr\Ingestor\Contract\ReleasedImport;
 use Ivanfuhr\Ingestor\Contract\SourceDriver;
 use Ivanfuhr\Ingestor\Contract\ValidatesRows;
 use Ivanfuhr\Ingestor\Dataset\Dataset;
+use Ivanfuhr\Ingestor\Exception\CannotRelease;
 use Ivanfuhr\Ingestor\Ingestor;
 use Ivanfuhr\Ingestor\Schema\Schema;
 use Ivanfuhr\Ingestor\Stage\EmptyStage;
@@ -414,5 +421,286 @@ final class IngestorTest extends TestCase
         $this->assertSame('customers', $failure->dataset());
         $this->assertSame('null value in column "document" violates not-null constraint', $failure->message());
         $this->assertInstanceOf(\PDOException::class, $failure->cause());
+    }
+
+    #[Test]
+    public function it_calls_before_import_before_prepare(): void
+    {
+        $definition = new class () implements Definition, BeforeImport, Preparable {
+            /** @var list<string> */
+            public static array $events = [];
+
+            public function schema(): Schema
+            {
+                return Schema::make()
+                    ->dataset('customers')
+                        ->using(EmptyStage::class);
+            }
+
+            public function beforeImport(Context $context): void
+            {
+                self::$events[] = 'beforeImport';
+                $context->put('hook', 'started');
+            }
+
+            public function prepare(Context $context): void
+            {
+                self::$events[] = 'prepare';
+
+                if (!$context->has('hook')) {
+                    throw new \RuntimeException('beforeImport did not run before prepare.');
+                }
+            }
+
+            public function map(array $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('customers', $row);
+            }
+        };
+
+        $source = new class () implements SourceDriver {
+            public function read(mixed $source): iterable
+            {
+                yield new ArrayRowContext(1, ['document' => '1', 'name' => 'Ada']);
+            }
+        };
+
+        $persistence = $this->noopPersistence();
+
+        $ingestor = new Ingestor($persistence, $source);
+
+        $ingestor
+            ->for($definition::class)
+            ->from('ignored')
+            ->import();
+
+        $this->assertSame(['beforeImport', 'prepare'], $definition::class::$events);
+    }
+
+    #[Test]
+    public function it_calls_after_import_once_import_finishes(): void
+    {
+        $definition = new class () implements Definition, AfterImport {
+            public static int $calls = 0;
+
+            public static ?ImportedImport $import = null;
+
+            public function schema(): Schema
+            {
+                return Schema::make()
+                    ->dataset('customers')
+                        ->using(EmptyStage::class);
+            }
+
+            public function afterImport(ImportedImport $import): void
+            {
+                ++self::$calls;
+                self::$import = $import;
+            }
+
+            public function map(array $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('customers', $row);
+            }
+        };
+
+        $source = new class () implements SourceDriver {
+            public function read(mixed $source): iterable
+            {
+                yield new ArrayRowContext(1, ['document' => '1', 'name' => 'Ada']);
+                yield new ArrayRowContext(2, ['document' => '2', 'name' => 'Bob']);
+            }
+        };
+
+        $persistence = $this->noopPersistence();
+
+        $ingestor = new Ingestor($persistence, $source);
+
+        $result = $ingestor
+            ->for($definition::class)
+            ->from('ignored')
+            ->import();
+
+        $this->assertSame(1, $definition::class::$calls);
+        $this->assertSame($result, $definition::class::$import);
+        $this->assertFalse($result->hasFailures());
+    }
+
+    #[Test]
+    public function it_calls_release_hooks_in_order(): void
+    {
+        $definition = new class () implements Definition, BeforeRelease, AfterRelease {
+            /** @var list<string> */
+            public static array $events = [];
+
+            public static ?ImportedImport $beforeReleaseImport = null;
+
+            public static ?ReleasedImport $afterReleaseImport = null;
+
+            public function schema(): Schema
+            {
+                return Schema::make()
+                    ->dataset('customers')
+                        ->using(EmptyStage::class);
+            }
+
+            public function beforeRelease(ImportedImport $import): void
+            {
+                self::$events[] = 'beforeRelease';
+                self::$beforeReleaseImport = $import;
+            }
+
+            public function afterRelease(ReleasedImport $import): void
+            {
+                self::$events[] = 'afterRelease';
+                self::$afterReleaseImport = $import;
+            }
+
+            public function map(array $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('customers', $row);
+            }
+        };
+
+        $source = new class () implements SourceDriver {
+            public function read(mixed $source): iterable
+            {
+                yield new ArrayRowContext(1, ['document' => '1', 'name' => 'Ada']);
+            }
+        };
+
+        $persistence = new class () implements PersistenceDriver {
+            /** @var list<string> */
+            public array $events = [];
+
+            public function begin(Definition $definition, Context $context): Stage
+            {
+                return new Stage('stage-1', $definition, ['customers' => 'stage_customers'], $context);
+            }
+
+            public function ingest(Stage $stage, iterable $rows): array
+            {
+                return [];
+            }
+
+            public function release(Stage $stage): void
+            {
+                $this->events[] = 'release';
+            }
+
+            public function rollback(Stage $stage): void
+            {
+            }
+        };
+
+        $ingestor = new Ingestor($persistence, $source);
+
+        $result = $ingestor
+            ->for($definition::class)
+            ->from('ignored')
+            ->import();
+
+        $result->release();
+
+        $this->assertSame(['beforeRelease', 'afterRelease'], $definition::class::$events);
+        $this->assertSame(['release'], $persistence->events);
+        $this->assertSame($result, $definition::class::$beforeReleaseImport);
+        $this->assertNotNull($definition::class::$afterReleaseImport);
+        $this->assertSame($result->stage(), $definition::class::$afterReleaseImport->stage());
+    }
+
+    #[Test]
+    public function it_prevents_release_when_before_release_throws(): void
+    {
+        $definition = new class () implements Definition, BeforeRelease {
+            public function schema(): Schema
+            {
+                return Schema::make()
+                    ->dataset('customers')
+                        ->using(EmptyStage::class);
+            }
+
+            public function beforeRelease(ImportedImport $import): void
+            {
+                throw CannotRelease::because('Import contains unresolved failures.');
+            }
+
+            public function map(array $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('customers', $row);
+            }
+        };
+
+        $source = new class () implements SourceDriver {
+            public function read(mixed $source): iterable
+            {
+                yield new ArrayRowContext(1, ['document' => '1', 'name' => 'Ada']);
+            }
+        };
+
+        $persistence = new class () implements PersistenceDriver {
+            public bool $released = false;
+
+            public function begin(Definition $definition, Context $context): Stage
+            {
+                return new Stage('stage-1', $definition, ['customers' => 'stage_customers'], $context);
+            }
+
+            public function ingest(Stage $stage, iterable $rows): array
+            {
+                return [];
+            }
+
+            public function release(Stage $stage): void
+            {
+                $this->released = true;
+            }
+
+            public function rollback(Stage $stage): void
+            {
+            }
+        };
+
+        $ingestor = new Ingestor($persistence, $source);
+
+        $result = $ingestor
+            ->for($definition::class)
+            ->from('ignored')
+            ->import();
+
+        $this->expectException(CannotRelease::class);
+        $this->expectExceptionMessage('Import contains unresolved failures.');
+
+        $result->release();
+
+        $this->assertFalse($persistence->released);
+    }
+
+    /**
+     * @return PersistenceDriver&object{stage: ?Stage}
+     */
+    private function noopPersistence(): object
+    {
+        return new class () implements PersistenceDriver {
+            public ?Stage $stage = null;
+
+            public function begin(Definition $definition, Context $context): Stage
+            {
+                return $this->stage = new Stage('stage-1', $definition, ['customers' => 'stage_customers'], $context);
+            }
+
+            public function ingest(Stage $stage, iterable $rows): array
+            {
+                return [];
+            }
+
+            public function release(Stage $stage): void
+            {
+            }
+
+            public function rollback(Stage $stage): void
+            {
+            }
+        };
     }
 }

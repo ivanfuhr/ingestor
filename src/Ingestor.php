@@ -14,6 +14,7 @@ use Ivanfuhr\Ingestor\Contract\BeforeImport;
 use Ivanfuhr\Ingestor\Contract\Context;
 use Ivanfuhr\Ingestor\Contract\Definition;
 use Ivanfuhr\Ingestor\Contract\Failure;
+use Ivanfuhr\Ingestor\Contract\Ingestor as IngestorContract;
 use Ivanfuhr\Ingestor\Contract\PersistenceDriver;
 use Ivanfuhr\Ingestor\Contract\Preparable;
 use Ivanfuhr\Ingestor\Contract\RowContext;
@@ -22,13 +23,18 @@ use Ivanfuhr\Ingestor\Contract\ValidatesRows;
 use Ivanfuhr\Ingestor\Metrics\MetricsRecorder;
 use Ivanfuhr\Ingestor\Validation\Severity;
 
-final class Ingestor
+final class Ingestor implements IngestorContract
 {
     private ?Definition $definition = null;
 
     private mixed $importSource = null;
 
-    public function __construct(
+    public static function make(PersistenceDriver $persistence, SourceDriver $source): self
+    {
+        return new self($persistence, $source);
+    }
+
+    private function __construct(
         private readonly PersistenceDriver $persistence,
         private readonly SourceDriver $source,
     ) {

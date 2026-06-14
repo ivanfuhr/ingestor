@@ -343,12 +343,21 @@ final class PostgresStagingIngestor
             return $sql;
         }
 
-        return $sql . $this->conflictClause($table, $conflictStrategy);
+        return $sql . $this->conflictClause($table, $columns, $conflictStrategy);
     }
 
-    private function conflictClause(string $table, ConflictStrategy $conflictStrategy): string
+    /**
+     * @param list<string> $insertColumns
+     */
+    private function conflictClause(string $table, array $insertColumns, ConflictStrategy $conflictStrategy): string
     {
-        $cacheKey = $table . "\0" . $conflictStrategy->type()->name . "\0" . implode("\0", $conflictStrategy->columns());
+        $cacheKey = $table
+            . "\0"
+            . $conflictStrategy->type()->name
+            . "\0"
+            . implode("\0", $conflictStrategy->columns())
+            . "\0"
+            . implode("\0", $insertColumns);
 
         if (isset($this->conflictClauseCache[$cacheKey])) {
             return $this->conflictClauseCache[$cacheKey];
@@ -372,7 +381,10 @@ final class PostgresStagingIngestor
                         $this->identifiers->quote($column),
                         $this->identifiers->quote($column),
                     ),
-                    array_filter($tableColumns, static fn (string $column): bool => !isset($conflictColumnSet[$column])),
+                    array_filter(
+                        $insertColumns,
+                        static fn (string $column): bool => !isset($conflictColumnSet[$column]),
+                    ),
                 )),
             ),
             ConflictType::Replace => sprintf(

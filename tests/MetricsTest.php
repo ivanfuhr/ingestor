@@ -84,7 +84,7 @@ final class MetricsTest extends TestCase
             }
         };
 
-        $ingestor = new Ingestor($persistence, $source);
+        $ingestor = Ingestor::make($persistence, $source);
 
         $result = $ingestor
             ->for(SimpleCustomerImport::class)
@@ -124,7 +124,7 @@ final class MetricsTest extends TestCase
 
         $persistence = $this->mappingPersistence();
 
-        $ingestor = new Ingestor($persistence, $source);
+        $ingestor = Ingestor::make($persistence, $source);
 
         $result = $ingestor
             ->for(ValidatableCustomerImport::class)
@@ -188,7 +188,7 @@ final class MetricsTest extends TestCase
             }
         };
 
-        $ingestor = new Ingestor($persistence, $source);
+        $ingestor = Ingestor::make($persistence, $source);
 
         $result = $ingestor
             ->for(SimpleCustomerImport::class)
@@ -239,7 +239,7 @@ final class MetricsTest extends TestCase
 
         $persistence = $this->mappingPersistence();
 
-        $ingestor = new Ingestor($persistence, $source);
+        $ingestor = Ingestor::make($persistence, $source);
 
         $result = $ingestor
             ->for($definition::class)
@@ -268,7 +268,7 @@ final class MetricsTest extends TestCase
 
         $persistence = $this->mappingPersistence();
 
-        $ingestor = new Ingestor($persistence, $source);
+        $ingestor = Ingestor::make($persistence, $source);
 
         $result = $ingestor
             ->for(SimpleCustomerImport::class)

@@ -70,7 +70,7 @@ cpf,name
 CSV);
 
         $postgresDriver = new PostgresDriver($this->pdo);
-        $ingestor = new Ingestor($postgresDriver, new CsvDriver());
+        $ingestor = Ingestor::make($postgresDriver, new CsvDriver());
 
         $ingestor
             ->for($definition::class)
@@ -111,7 +111,7 @@ CSV);
 
         $csv = $this->createCsv("cpf,name\n111,New Name\n");
 
-        $ingestor = new Ingestor(new PostgresDriver($this->pdo), new CsvDriver());
+        $ingestor = Ingestor::make(new PostgresDriver($this->pdo), new CsvDriver());
 
         $ingestor
             ->for($definition::class)
@@ -122,6 +122,57 @@ CSV);
         $row = $this->pdo->query("SELECT name FROM customers WHERE document = '111'")->fetch(PDO::FETCH_ASSOC);
 
         $this->assertSame(['name' => 'New Name'], $row);
+    }
+
+    #[Test]
+    public function it_preserves_surrogate_key_on_conflict_update(): void
+    {
+        $this->pdo->exec('DROP TABLE IF EXISTS customer_records CASCADE');
+        $this->pdo->exec(<<<'SQL'
+CREATE TABLE customer_records (
+    id SERIAL PRIMARY KEY,
+    customer_id TEXT NOT NULL UNIQUE,
+    customer_state TEXT NOT NULL
+)
+SQL);
+        $this->pdo->exec("INSERT INTO customer_records (customer_id, customer_state) VALUES ('06b8999e2fba1a1fbc88172c00ba8bc7', 'SP')");
+
+        $existingId = (int) $this->pdo->query("SELECT id FROM customer_records WHERE customer_id = '06b8999e2fba1a1fbc88172c00ba8bc7'")->fetchColumn();
+
+        $definition = new class () implements Definition {
+            public function schema(): Schema
+            {
+                return Schema::make()
+                    ->dataset('customer_records')
+                        ->using(PrefilledStage::class)
+                        ->onConflict(UpdateOnConflict::by('customer_id'));
+            }
+
+            public function map(array $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('customer_records', [
+                    'customer_id' => $row['customer_id'],
+                    'customer_state' => $row['customer_state'],
+                ]);
+            }
+        };
+
+        $csv = $this->createCsv("customer_id,customer_state\n06b8999e2fba1a1fbc88172c00ba8bc7,RS\n");
+
+        $ingestor = Ingestor::make(new PostgresDriver($this->pdo), new CsvDriver());
+
+        $ingestor
+            ->for($definition::class)
+            ->from($csv)
+            ->import()
+            ->release();
+
+        $row = $this->pdo->query("SELECT id, customer_state FROM customer_records WHERE customer_id = '06b8999e2fba1a1fbc88172c00ba8bc7'")->fetch(PDO::FETCH_ASSOC);
+
+        $this->assertSame($existingId, (int) $row['id']);
+        $this->assertSame('RS', $row['customer_state']);
+
+        $this->pdo->exec('DROP TABLE IF EXISTS customer_records CASCADE');
     }
 
     #[Test]
@@ -159,7 +210,7 @@ SQL);
 
         $csv = $this->createCsv("cpf,rg,name\n111,AA,New Name\n222,BB,Another\n");
 
-        $ingestor = new Ingestor(new PostgresDriver($this->pdo), new CsvDriver());
+        $ingestor = Ingestor::make(new PostgresDriver($this->pdo), new CsvDriver());
 
         $ingestor
             ->for($definition::class)
@@ -209,7 +260,7 @@ SQL);
 
         $csv = $this->createCsv(implode("\n", $csvLines) . "\n");
 
-        $ingestor = new Ingestor(new PostgresDriver($this->pdo, chunkSize: 2), new CsvDriver());
+        $ingestor = Ingestor::make(new PostgresDriver($this->pdo, chunkSize: 2), new CsvDriver());
 
         $ingestor
             ->for($definition::class)
@@ -259,7 +310,7 @@ SQL);
 
         $csv = $this->createCsv(implode("\n", $csvLines) . "\n");
 
-        $ingestor = new Ingestor(new PostgresDriver($this->pdo, chunkSize: 2), new CsvDriver());
+        $ingestor = Ingestor::make(new PostgresDriver($this->pdo, chunkSize: 2), new CsvDriver());
 
         $ingestor
             ->for($definition::class)
@@ -302,7 +353,7 @@ BAD,Broken
 333,Charlie
 CSV);
 
-        $ingestor = new Ingestor(
+        $ingestor = Ingestor::make(
             new PostgresDriver($this->pdo, chunkSize: 10, failureMode: SqlFailureMode::Diagnostic),
             new CsvDriver(),
         );
@@ -361,7 +412,7 @@ cpf,name
 BAD,Broken
 CSV);
 
-        $ingestor = new Ingestor(
+        $ingestor = Ingestor::make(
             new PostgresDriver($this->pdo, chunkSize: 2, failureMode: SqlFailureMode::Diagnostic),
             new CsvDriver(),
         );
@@ -418,7 +469,7 @@ cpf,name
 BAD,Broken
 CSV);
 
-        $ingestor = new Ingestor(
+        $ingestor = Ingestor::make(
             new PostgresDriver($this->pdo, chunkSize: 10, failureMode: SqlFailureMode::Fast),
             new CsvDriver(),
         );
@@ -467,7 +518,7 @@ cpf,name
 222,Bob
 CSV);
 
-        $ingestor = new Ingestor(new PostgresDriver($this->pdo), new CsvDriver());
+        $ingestor = Ingestor::make(new PostgresDriver($this->pdo), new CsvDriver());
 
         $ingestor
             ->for($definition::class)
@@ -511,7 +562,7 @@ cpf,name
 222,Bob
 CSV);
 
-        $ingestor = new Ingestor(new PostgresDriver($this->pdo), new CsvDriver());
+        $ingestor = Ingestor::make(new PostgresDriver($this->pdo), new CsvDriver());
 
         $result = $ingestor
             ->for($definition::class)
@@ -561,7 +612,7 @@ SQL);
 
         $csv = $this->createCsv("cpf,name\n222,New Customer\n");
 
-        $ingestor = new Ingestor(new PostgresDriver($this->pdo), new CsvDriver());
+        $ingestor = Ingestor::make(new PostgresDriver($this->pdo), new CsvDriver());
 
         $ingestor
             ->for($definition::class)

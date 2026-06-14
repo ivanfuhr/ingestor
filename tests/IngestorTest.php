@@ -75,7 +75,7 @@ final class IngestorTest extends TestCase
             }
         };
 
-        $ingestor = new Ingestor($persistence, $source);
+        $ingestor = Ingestor::make($persistence, $source);
 
         $ingestor
             ->for(SimpleCustomerImport::class)
@@ -147,7 +147,7 @@ final class IngestorTest extends TestCase
             }
         };
 
-        $ingestor = new Ingestor($persistence, $source);
+        $ingestor = Ingestor::make($persistence, $source);
 
         $ingestor
             ->for($definition::class)
@@ -201,7 +201,7 @@ final class IngestorTest extends TestCase
             }
         };
 
-        $ingestor = new Ingestor($persistence, $source);
+        $ingestor = Ingestor::make($persistence, $source);
 
         $ingestor
             ->for(PreparableCustomerImport::class)
@@ -257,7 +257,7 @@ final class IngestorTest extends TestCase
             }
         };
 
-        $ingestor = new Ingestor($persistence, $source);
+        $ingestor = Ingestor::make($persistence, $source);
 
         $result = $ingestor
             ->for(ValidatableCustomerImport::class)
@@ -356,7 +356,7 @@ final class IngestorTest extends TestCase
             }
         };
 
-        $ingestor = new Ingestor($persistence, $source);
+        $ingestor = Ingestor::make($persistence, $source);
 
         $ingestor
             ->for($definition::class)
@@ -406,7 +406,7 @@ final class IngestorTest extends TestCase
             }
         };
 
-        $ingestor = new Ingestor($persistence, $source);
+        $ingestor = Ingestor::make($persistence, $source);
 
         $result = $ingestor
             ->for(SimpleCustomerImport::class)
@@ -467,7 +467,7 @@ final class IngestorTest extends TestCase
 
         $persistence = $this->noopPersistence();
 
-        $ingestor = new Ingestor($persistence, $source);
+        $ingestor = Ingestor::make($persistence, $source);
 
         $ingestor
             ->for($definition::class)
@@ -514,7 +514,7 @@ final class IngestorTest extends TestCase
 
         $persistence = $this->noopPersistence();
 
-        $ingestor = new Ingestor($persistence, $source);
+        $ingestor = Ingestor::make($persistence, $source);
 
         $result = $ingestor
             ->for($definition::class)
@@ -593,7 +593,7 @@ final class IngestorTest extends TestCase
             }
         };
 
-        $ingestor = new Ingestor($persistence, $source);
+        $ingestor = Ingestor::make($persistence, $source);
 
         $result = $ingestor
             ->for($definition::class)
@@ -661,7 +661,7 @@ final class IngestorTest extends TestCase
             }
         };
 
-        $ingestor = new Ingestor($persistence, $source);
+        $ingestor = Ingestor::make($persistence, $source);
 
         $result = $ingestor
             ->for($definition::class)

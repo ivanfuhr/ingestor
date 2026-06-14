@@ -7,7 +7,7 @@ namespace Ivanfuhr\Ingestor\Contract;
 interface SourceDriver
 {
     /**
-     * @return iterable<int, array<string, mixed>>
+     * @return iterable<RowContext>
      */
     public function read(mixed $source): iterable;
 }

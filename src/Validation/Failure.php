@@ -12,6 +12,7 @@ final class Failure implements FailureContract
         private readonly ?string $field,
         private readonly string $message,
         private readonly Severity $severity,
+        private readonly ?int $line = null,
     ) {
     }
 
@@ -25,9 +26,27 @@ final class Failure implements FailureContract
         return new FailureBuilder($field, Severity::WARNING);
     }
 
+    public function line(): ?int
+    {
+        return $this->line;
+    }
+
     public function field(): ?string
     {
         return $this->field;
+    }
+
+    public function dataset(): ?string
+    {
+        return null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function data(): ?array
+    {
+        return null;
     }
 
     public function message(): string
@@ -38,5 +57,10 @@ final class Failure implements FailureContract
     public function severity(): Severity
     {
         return $this->severity;
+    }
+
+    public function cause(): ?\Throwable
+    {
+        return null;
     }
 }

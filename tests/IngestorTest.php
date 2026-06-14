@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ivanfuhr\Ingestor\Tests;
 
+use Ivanfuhr\Ingestor\Context\ArrayRowContext;
 use Ivanfuhr\Ingestor\Contract\Context;
 use Ivanfuhr\Ingestor\Contract\Definition;
 use Ivanfuhr\Ingestor\Contract\PersistenceDriver;
@@ -30,7 +31,7 @@ final class IngestorTest extends TestCase
         $source = new class () implements SourceDriver {
             public function read(mixed $source): iterable
             {
-                yield ['document' => '1', 'name' => 'Ada'];
+                yield new ArrayRowContext(1, ['document' => '1', 'name' => 'Ada']);
             }
         };
 
@@ -47,11 +48,13 @@ final class IngestorTest extends TestCase
                 return $this->stage = new Stage('stage-1', $definition, ['customers' => 'stage_customers'], $context);
             }
 
-            public function ingest(Stage $stage, iterable $rows): void
+            public function ingest(Stage $stage, iterable $rows): array
             {
-                foreach ($rows as $row) {
-                    $this->ingestedRows[] = $row;
+                foreach ($rows as $rowContext) {
+                    $this->ingestedRows[] = $rowContext->data();
                 }
+
+                return [];
             }
 
             public function release(Stage $stage): void
@@ -106,7 +109,7 @@ final class IngestorTest extends TestCase
         $source = new class () implements SourceDriver {
             public function read(mixed $source): iterable
             {
-                yield ['document' => '1', 'name' => 'Ada'];
+                yield new ArrayRowContext(1, ['document' => '1', 'name' => 'Ada']);
             }
         };
 
@@ -118,11 +121,13 @@ final class IngestorTest extends TestCase
                 return $this->stage = new Stage('stage-1', $definition, ['customers' => 'stage_customers'], $context);
             }
 
-            public function ingest(Stage $stage, iterable $rows): void
+            public function ingest(Stage $stage, iterable $rows): array
             {
-                foreach ($rows as $row) {
-                    $stage->definition->map($row, $stage->context);
+                foreach ($rows as $rowContext) {
+                    $stage->definition->map($rowContext->data(), $stage->context);
                 }
+
+                return [];
             }
 
             public function release(Stage $stage): void
@@ -152,8 +157,8 @@ final class IngestorTest extends TestCase
         $source = new class () implements SourceDriver {
             public function read(mixed $source): iterable
             {
-                yield ['document' => '111', 'name' => 'Ada'];
-                yield ['document' => '222', 'name' => 'Bob'];
+                yield new ArrayRowContext(1, ['document' => '111', 'name' => 'Ada']);
+                yield new ArrayRowContext(2, ['document' => '222', 'name' => 'Bob']);
             }
         };
 
@@ -166,15 +171,17 @@ final class IngestorTest extends TestCase
                 return new Stage('stage-1', $definition, ['customers' => 'stage_customers'], $context);
             }
 
-            public function ingest(Stage $stage, iterable $rows): void
+            public function ingest(Stage $stage, iterable $rows): array
             {
-                foreach ($rows as $row) {
-                    $dataset = $stage->definition->map($row, $stage->context);
+                foreach ($rows as $rowContext) {
+                    $dataset = $stage->definition->map($rowContext->data(), $stage->context);
 
                     foreach ($dataset->mutations() as $mutation) {
                         $this->mappedRows[] = $mutation->data;
                     }
                 }
+
+                return [];
             }
 
             public function release(Stage $stage): void
@@ -205,9 +212,9 @@ final class IngestorTest extends TestCase
         $source = new class () implements SourceDriver {
             public function read(mixed $source): iterable
             {
-                yield ['document' => '', 'name' => 'Invalid', 'phone' => '123', 'city' => 'SP'];
-                yield ['document' => '111', 'name' => 'Valid', 'phone' => '', 'city' => 'SP'];
-                yield ['document' => '222', 'name' => 'Unknown city', 'phone' => '456', 'city' => 'XX'];
+                yield new ArrayRowContext(1, ['document' => '', 'name' => 'Invalid', 'phone' => '123', 'city' => 'SP']);
+                yield new ArrayRowContext(2, ['document' => '111', 'name' => 'Valid', 'phone' => '', 'city' => 'SP']);
+                yield new ArrayRowContext(3, ['document' => '222', 'name' => 'Unknown city', 'phone' => '456', 'city' => 'XX']);
             }
         };
 
@@ -220,15 +227,17 @@ final class IngestorTest extends TestCase
                 return new Stage('stage-1', $definition, ['customers' => 'stage_customers'], $context);
             }
 
-            public function ingest(Stage $stage, iterable $rows): void
+            public function ingest(Stage $stage, iterable $rows): array
             {
-                foreach ($rows as $row) {
-                    $dataset = $stage->definition->map($row, $stage->context);
+                foreach ($rows as $rowContext) {
+                    $dataset = $stage->definition->map($rowContext->data(), $stage->context);
 
                     foreach ($dataset->mutations() as $mutation) {
                         $this->mappedRows[] = $mutation->data;
                     }
                 }
+
+                return [];
             }
 
             public function release(Stage $stage): void
@@ -256,20 +265,22 @@ final class IngestorTest extends TestCase
             ],
         ], $persistence->mappedRows);
 
-        $errors = $result->errors();
-        $this->assertCount(3, $errors);
+        $failures = $result->failures();
+        $this->assertTrue($result->hasFailures());
+        $this->assertCount(3, $failures);
+        $this->assertSame($failures, $result->errors());
 
-        $this->assertSame('document', $errors[0]->field());
-        $this->assertSame('Document is required.', $errors[0]->message());
-        $this->assertSame(Severity::ERROR, $errors[0]->severity());
+        $this->assertSame('document', $failures[0]->field());
+        $this->assertSame('Document is required.', $failures[0]->message());
+        $this->assertSame(Severity::ERROR, $failures[0]->severity());
 
-        $this->assertSame('phone', $errors[1]->field());
-        $this->assertSame('Phone number is empty.', $errors[1]->message());
-        $this->assertSame(Severity::WARNING, $errors[1]->severity());
+        $this->assertSame('phone', $failures[1]->field());
+        $this->assertSame('Phone number is empty.', $failures[1]->message());
+        $this->assertSame(Severity::WARNING, $failures[1]->severity());
 
-        $this->assertSame('city', $errors[2]->field());
-        $this->assertSame('City not found.', $errors[2]->message());
-        $this->assertSame(Severity::ERROR, $errors[2]->severity());
+        $this->assertSame('city', $failures[2]->field());
+        $this->assertSame('City not found.', $failures[2]->message());
+        $this->assertSame(Severity::ERROR, $failures[2]->severity());
     }
 
     #[Test]
@@ -310,7 +321,7 @@ final class IngestorTest extends TestCase
         $source = new class () implements SourceDriver {
             public function read(mixed $source): iterable
             {
-                yield ['document' => '1', 'name' => 'Ada'];
+                yield new ArrayRowContext(1, ['document' => '1', 'name' => 'Ada']);
             }
         };
 
@@ -320,11 +331,13 @@ final class IngestorTest extends TestCase
                 return new Stage('stage-1', $definition, ['customers' => 'stage_customers'], $context);
             }
 
-            public function ingest(Stage $stage, iterable $rows): void
+            public function ingest(Stage $stage, iterable $rows): array
             {
-                foreach ($rows as $row) {
-                    $stage->definition->map($row, $stage->context);
+                foreach ($rows as $rowContext) {
+                    $stage->definition->map($rowContext->data(), $stage->context);
                 }
+
+                return [];
             }
 
             public function release(Stage $stage): void
@@ -344,5 +357,62 @@ final class IngestorTest extends TestCase
             ->import();
 
         $this->assertTrue($definition::class::$validatedWithPreparedContext);
+    }
+
+    #[Test]
+    public function it_collects_persistence_failures_without_auto_rollback(): void
+    {
+        $source = new class () implements SourceDriver {
+            public function read(mixed $source): iterable
+            {
+                yield new ArrayRowContext(1, ['document' => '1', 'name' => 'Ada']);
+            }
+        };
+
+        $persistence = new class () implements PersistenceDriver {
+            public bool $rolledBack = false;
+
+            public function begin(Definition $definition, Context $context): Stage
+            {
+                return new Stage('stage-1', $definition, ['customers' => 'stage_customers'], $context);
+            }
+
+            public function ingest(Stage $stage, iterable $rows): array
+            {
+                return [
+                    \Ivanfuhr\Ingestor\Persistence\Failure::fromException(
+                        line: 1,
+                        dataset: 'customers',
+                        data: ['document' => '1', 'name' => 'Ada'],
+                        cause: new \PDOException('null value in column "document" violates not-null constraint'),
+                    ),
+                ];
+            }
+
+            public function release(Stage $stage): void
+            {
+            }
+
+            public function rollback(Stage $stage): void
+            {
+                $this->rolledBack = true;
+            }
+        };
+
+        $ingestor = new Ingestor($persistence, $source);
+
+        $result = $ingestor
+            ->for(SimpleCustomerImport::class)
+            ->from('ignored')
+            ->import();
+
+        $this->assertFalse($persistence->rolledBack);
+        $this->assertTrue($result->hasFailures());
+
+        $failure = $result->failures()[0];
+        $this->assertSame(1, $failure->line());
+        $this->assertSame('customers', $failure->dataset());
+        $this->assertSame('null value in column "document" violates not-null constraint', $failure->message());
+        $this->assertInstanceOf(\PDOException::class, $failure->cause());
     }
 }

@@ -6,10 +6,12 @@ namespace Ivanfuhr\Ingestor\Tests\Driver\Persistence;
 
 use PDOException;
 use Ivanfuhr\Ingestor\Conflict\UpdateOnConflict;
+use Ivanfuhr\Ingestor\Conflict\IgnoreOnConflict;
 use Ivanfuhr\Ingestor\Contract\Context;
 use Ivanfuhr\Ingestor\Contract\Definition;
 use Ivanfuhr\Ingestor\Dataset\Dataset;
 use Ivanfuhr\Ingestor\Driver\Persistence\PostgresDriver;
+use Ivanfuhr\Ingestor\Driver\Persistence\SqlFailureMode;
 use Ivanfuhr\Ingestor\Driver\Source\CsvDriver;
 use Ivanfuhr\Ingestor\Ingestor;
 use Ivanfuhr\Ingestor\Schema\Schema;
@@ -219,8 +221,252 @@ CSV);
         $this->assertSame(4, (int) $addresses);
     }
 
+    #[Test]
+    public function it_collects_persistence_failures_in_diagnostic_mode(): void
+    {
+        $definition = new class () implements Definition {
+            public function schema(): Schema
+            {
+                return Schema::make()
+                    ->dataset('customers')
+                        ->using(EmptyStage::class)
+                        ->commit();
+            }
+
+            public function map(array $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('customers', [
+                    'document' => $row['cpf'] === 'BAD' ? null : $row['cpf'],
+                    'name' => $row['name'],
+                ]);
+            }
+        };
+
+        $csv = $this->createCsv(<<<'CSV'
+cpf,name
+111,Ada
+BAD,Broken
+333,Charlie
+CSV);
+
+        $ingestor = new Ingestor(
+            new PostgresDriver($this->pdo, chunkSize: 10, failureMode: SqlFailureMode::Diagnostic),
+            new CsvDriver(),
+        );
+
+        $result = $ingestor
+            ->for($definition::class)
+            ->from($csv)
+            ->import();
+
+        $this->assertTrue($result->hasFailures());
+        $this->assertCount(1, $result->failures());
+
+        $failure = $result->failures()[0];
+        $this->assertSame(3, $failure->line());
+        $this->assertSame('customers', $failure->dataset());
+        $this->assertSame(['cpf' => 'BAD', 'name' => 'Broken'], $failure->data());
+        $this->assertStringContainsString('null value in column "document"', $failure->message());
+        $this->assertInstanceOf(PDOException::class, $failure->cause());
+
+        $result->release();
+
+        $rows = $this->pdo->query('SELECT document, name FROM customers ORDER BY document')->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->assertSame([
+            ['document' => '111', 'name' => 'Ada'],
+            ['document' => '333', 'name' => 'Charlie'],
+        ], $rows);
+    }
+
+    #[Test]
+    public function it_collects_batch_failures_in_fast_mode(): void
+    {
+        $definition = new class () implements Definition {
+            public function schema(): Schema
+            {
+                return Schema::make()
+                    ->dataset('customers')
+                        ->using(EmptyStage::class)
+                        ->commit();
+            }
+
+            public function map(array $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('customers', [
+                    'document' => $row['cpf'] === 'BAD' ? null : $row['cpf'],
+                    'name' => $row['name'],
+                ]);
+            }
+        };
+
+        $csv = $this->createCsv(<<<'CSV'
+cpf,name
+111,Ada
+BAD,Broken
+CSV);
+
+        $ingestor = new Ingestor(
+            new PostgresDriver($this->pdo, chunkSize: 10, failureMode: SqlFailureMode::Fast),
+            new CsvDriver(),
+        );
+
+        $result = $ingestor
+            ->for($definition::class)
+            ->from($csv)
+            ->import();
+
+        $this->assertTrue($result->hasFailures());
+        $this->assertCount(1, $result->failures());
+
+        $failure = $result->failures()[0];
+        $this->assertNull($failure->line());
+        $this->assertSame('customers', $failure->dataset());
+        $this->assertNull($failure->data());
+        $this->assertStringContainsString('null value in column "document"', $failure->message());
+    }
+
+    #[Test]
+    public function it_replaces_production_contents_on_release(): void
+    {
+        $this->pdo->exec("INSERT INTO customers (document, name) VALUES ('999', 'Legacy'), ('111', 'Old Name')");
+
+        $definition = new class () implements Definition {
+            public function schema(): Schema
+            {
+                return Schema::make()
+                    ->dataset('customers')
+                        ->using(EmptyStage::class)
+                        ->commit();
+            }
+
+            public function map(array $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('customers', [
+                    'document' => $row['cpf'],
+                    'name' => $row['name'],
+                ]);
+            }
+        };
+
+        $csv = $this->createCsv(<<<'CSV'
+cpf,name
+111,Ada
+222,Bob
+CSV);
+
+        $ingestor = new Ingestor(new PostgresDriver($this->pdo), new CsvDriver());
+
+        $ingestor
+            ->for($definition::class)
+            ->from($csv)
+            ->import()
+            ->release();
+
+        $rows = $this->pdo->query('SELECT document, name FROM customers ORDER BY document')->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->assertSame([
+            ['document' => '111', 'name' => 'Ada'],
+            ['document' => '222', 'name' => 'Bob'],
+        ], $rows);
+    }
+
+    #[Test]
+    public function it_applies_on_conflict_when_writing_to_staging(): void
+    {
+        $definition = new class () implements Definition {
+            public function schema(): Schema
+            {
+                return Schema::make()
+                    ->dataset('customers')
+                        ->using(EmptyStage::class)
+                        ->onConflict(IgnoreOnConflict::by('document'));
+            }
+
+            public function map(array $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('customers', [
+                    'document' => $row['cpf'],
+                    'name' => $row['name'],
+                ]);
+            }
+        };
+
+        $csv = $this->createCsv(<<<'CSV'
+cpf,name
+111,First
+111,Duplicate
+222,Bob
+CSV);
+
+        $ingestor = new Ingestor(new PostgresDriver($this->pdo), new CsvDriver());
+
+        $result = $ingestor
+            ->for($definition::class)
+            ->from($csv)
+            ->import();
+
+        $this->assertFalse($result->hasFailures());
+
+        $result->release();
+
+        $rows = $this->pdo->query('SELECT document, name FROM customers ORDER BY document')->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->assertSame([
+            ['document' => '111', 'name' => 'First'],
+            ['document' => '222', 'name' => 'Bob'],
+        ], $rows);
+    }
+
+    #[Test]
+    public function it_replaces_production_when_table_is_referenced_by_foreign_keys(): void
+    {
+        $this->pdo->exec(<<<'SQL'
+CREATE TABLE customer_notes (
+    document TEXT NOT NULL REFERENCES customers (document)
+)
+SQL);
+        $this->pdo->exec("INSERT INTO customers (document, name) VALUES ('111', 'Legacy')");
+        $this->pdo->exec("INSERT INTO customer_notes (document) VALUES ('111')");
+
+        $definition = new class () implements Definition {
+            public function schema(): Schema
+            {
+                return Schema::make()
+                    ->dataset('customers')
+                        ->using(EmptyStage::class)
+                        ->commit();
+            }
+
+            public function map(array $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('customers', [
+                    'document' => $row['cpf'],
+                    'name' => $row['name'],
+                ]);
+            }
+        };
+
+        $csv = $this->createCsv("cpf,name\n222,New Customer\n");
+
+        $ingestor = new Ingestor(new PostgresDriver($this->pdo), new CsvDriver());
+
+        $ingestor
+            ->for($definition::class)
+            ->from($csv)
+            ->import()
+            ->release();
+
+        $rows = $this->pdo->query('SELECT document, name FROM customers ORDER BY document')->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->assertSame([
+            ['document' => '222', 'name' => 'New Customer'],
+        ], $rows);
+    }
+
     private function resetDatabase(): void
     {
+        $this->pdo->exec('DROP TABLE IF EXISTS customer_notes CASCADE');
         $this->pdo->exec('DROP TABLE IF EXISTS customers CASCADE');
         $this->pdo->exec('DROP TABLE IF EXISTS addresses CASCADE');
         $this->pdo->exec(<<<'SQL'

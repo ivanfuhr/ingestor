@@ -11,13 +11,26 @@ use Ivanfuhr\Ingestor\Stage\Stage;
 final readonly class ImportResult
 {
     /**
-     * @param list<Failure> $errors
+     * @param list<Failure> $failures
      */
     public function __construct(
         private PersistenceDriver $persistence,
         private Stage $stage,
-        private array $errors = [],
+        private array $failures = [],
     ) {
+    }
+
+    /**
+     * @return list<Failure>
+     */
+    public function failures(): array
+    {
+        return $this->failures;
+    }
+
+    public function hasFailures(): bool
+    {
+        return $this->failures !== [];
     }
 
     /**
@@ -25,7 +38,7 @@ final readonly class ImportResult
      */
     public function errors(): array
     {
-        return $this->errors;
+        return $this->failures;
     }
 
     public function release(): void

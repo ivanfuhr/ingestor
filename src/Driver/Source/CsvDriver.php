@@ -6,6 +6,7 @@ namespace Ivanfuhr\Ingestor\Driver\Source;
 
 use InvalidArgumentException;
 use RuntimeException;
+use Ivanfuhr\Ingestor\Context\ArrayRowContext;
 use Ivanfuhr\Ingestor\Contract\SourceDriver;
 
 final class CsvDriver implements SourceDriver
@@ -27,6 +28,7 @@ final class CsvDriver implements SourceDriver
         }
 
         try {
+            $lineNumber = 1;
             $headers = fgetcsv($handle, length: 0, escape: '\\');
 
             if ($headers === false) {
@@ -38,11 +40,13 @@ final class CsvDriver implements SourceDriver
             }
 
             while (($values = fgetcsv($handle, length: 0, escape: '\\')) !== false) {
+                ++$lineNumber;
+
                 if ($values === [null]) {
                     continue;
                 }
 
-                yield $this->combine($headers, $values);
+                yield new ArrayRowContext($lineNumber, $this->combine($headers, $values));
             }
         } finally {
             fclose($handle);

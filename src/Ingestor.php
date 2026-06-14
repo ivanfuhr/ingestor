@@ -14,6 +14,7 @@ use Ivanfuhr\Ingestor\Contract\Definition;
 use Ivanfuhr\Ingestor\Contract\Failure;
 use Ivanfuhr\Ingestor\Contract\PersistenceDriver;
 use Ivanfuhr\Ingestor\Contract\Preparable;
+use Ivanfuhr\Ingestor\Contract\RowContext;
 use Ivanfuhr\Ingestor\Contract\SourceDriver;
 use Ivanfuhr\Ingestor\Contract\ValidatesRows;
 use Ivanfuhr\Ingestor\Validation\Severity;
@@ -71,43 +72,44 @@ final class Ingestor
 
         $stage = $this->persistence->begin($this->definition, $context);
 
-        /** @var list<Failure> $errors */
-        $errors = [];
+        /** @var list<Failure> $failures */
+        $failures = [];
 
         try {
             $rows = $this->source->read($this->importSource);
 
             if ($this->definition instanceof ValidatesRows) {
-                $rows = $this->validatedRows($this->definition, $rows, $context, $errors);
+                $rows = $this->validatedRows($this->definition, $rows, $context, $failures);
             }
 
-            $this->persistence->ingest($stage, $rows);
+            $persistenceFailures = $this->persistence->ingest($stage, $rows);
+            array_push($failures, ...$persistenceFailures);
         } catch (Throwable $throwable) {
             $this->persistence->rollback($stage);
 
             throw $throwable;
         }
 
-        return new ImportResult($this->persistence, $stage, $errors);
+        return new ImportResult($this->persistence, $stage, $failures);
     }
 
     /**
-     * @param iterable<int, array<string, mixed>> $rows
-     * @param list<Failure> $errors
+     * @param iterable<RowContext> $rows
+     * @param list<Failure> $failures
      *
-     * @return Generator<int, array<string, mixed>>
+     * @return Generator<int, RowContext>
      */
     private function validatedRows(
         ValidatesRows $definition,
         iterable $rows,
         Context $context,
-        array &$errors,
+        array &$failures,
     ): Generator {
-        foreach ($rows as $row) {
+        foreach ($rows as $rowContext) {
             $hasError = false;
 
-            foreach ($definition->validate($row, $context) as $failure) {
-                $errors[] = $failure;
+            foreach ($definition->validate($rowContext->data(), $context) as $failure) {
+                $failures[] = $failure;
 
                 if ($failure->severity() === Severity::ERROR) {
                     $hasError = true;
@@ -115,7 +117,7 @@ final class Ingestor
             }
 
             if (!$hasError) {
-                yield $row;
+                yield $rowContext;
             }
         }
     }

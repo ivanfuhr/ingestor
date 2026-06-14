@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Ivanfuhr\Ingestor\Tests\Driver\Source;
 
 use InvalidArgumentException;
+use Ivanfuhr\Ingestor\Contract\RowContext;
 use Ivanfuhr\Ingestor\Driver\Source\CsvDriver;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -24,16 +25,19 @@ CSV);
         $rows = iterator_to_array($csvDriver->read($path));
 
         $this->assertCount(2, $rows);
+        $this->assertInstanceOf(RowContext::class, $rows[0]);
+        $this->assertSame(2, $rows[0]->line());
         $this->assertSame([
             'cpf' => '111',
             'name' => 'Ada',
             'city' => 'SP',
-        ], $rows[0]);
+        ], $rows[0]->data());
+        $this->assertSame(3, $rows[1]->line());
         $this->assertSame([
             'cpf' => '222',
             'name' => 'Bob',
             'city' => 'RJ',
-        ], $rows[1]);
+        ], $rows[1]->data());
     }
 
     #[Test]

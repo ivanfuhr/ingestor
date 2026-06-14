@@ -11,9 +11,11 @@ interface PersistenceDriver
     public function begin(Definition $definition, Context $context): Stage;
 
     /**
-     * @param iterable<int, array<string, mixed>> $rows
+     * @param iterable<RowContext> $rows
+     *
+     * @return list<Failure>
      */
-    public function ingest(Stage $stage, iterable $rows): void;
+    public function ingest(Stage $stage, iterable $rows): array;
 
     public function release(Stage $stage): void;
 

@@ -15,6 +15,8 @@ interface ImportedImport
 
     public function hasFailures(): bool;
 
+    public function metrics(): Metrics;
+
     public function stage(): Stage;
 
     public function context(): Context;

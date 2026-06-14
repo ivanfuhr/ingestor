@@ -19,6 +19,7 @@ use Ivanfuhr\Ingestor\Contract\Preparable;
 use Ivanfuhr\Ingestor\Contract\RowContext;
 use Ivanfuhr\Ingestor\Contract\SourceDriver;
 use Ivanfuhr\Ingestor\Contract\ValidatesRows;
+use Ivanfuhr\Ingestor\Metrics\MetricsRecorder;
 use Ivanfuhr\Ingestor\Validation\Severity;
 
 final class Ingestor
@@ -81,28 +82,48 @@ final class Ingestor
         /** @var list<Failure> $failures */
         $failures = [];
 
+        $metrics = new MetricsRecorder();
+
         try {
-            $rows = $this->source->read($this->importSource);
+            $rows = $this->countedRows($this->source->read($this->importSource), $metrics);
 
             if ($this->definition instanceof ValidatesRows) {
-                $rows = $this->validatedRows($this->definition, $rows, $context, $failures);
+                $rows = $this->validatedRows($this->definition, $rows, $context, $failures, $metrics);
             }
 
-            $persistenceFailures = $this->persistence->ingest($stage, $rows);
+            $persistenceFailures = $this->persistence->ingest($stage, $rows, $metrics);
             array_push($failures, ...$persistenceFailures);
+
+            $this->recordPersistenceRowFailures($persistenceFailures, $metrics);
         } catch (Throwable $throwable) {
             $this->persistence->rollback($stage);
 
             throw $throwable;
+        } finally {
+            $metrics->finish();
         }
 
-        $result = new ImportResult($this->persistence, $stage, $failures);
+        $result = new ImportResult($this->persistence, $stage, $metrics->snapshot(), $failures);
 
         if ($this->definition instanceof AfterImport) {
             $this->definition->afterImport($result);
         }
 
         return $result;
+    }
+
+    /**
+     * @param iterable<RowContext> $rows
+     *
+     * @return Generator<int, RowContext>
+     */
+    private function countedRows(iterable $rows, MetricsRecorder $metrics): Generator
+    {
+        foreach ($rows as $rowContext) {
+            $metrics->recordRow();
+
+            yield $rowContext;
+        }
     }
 
     /**
@@ -116,6 +137,7 @@ final class Ingestor
         iterable $rows,
         Context $context,
         array &$failures,
+        MetricsRecorder $metrics,
     ): Generator {
         foreach ($rows as $rowContext) {
             $hasError = false;
@@ -128,8 +150,32 @@ final class Ingestor
                 }
             }
 
-            if (!$hasError) {
+            if ($hasError) {
+                $metrics->recordRowFailed();
+            } else {
                 yield $rowContext;
+            }
+        }
+    }
+
+    /**
+     * @param list<Failure> $failures
+     */
+    private function recordPersistenceRowFailures(array $failures, MetricsRecorder $metrics): void
+    {
+        /** @var array<int, true> $failedLines */
+        $failedLines = [];
+
+        foreach ($failures as $failure) {
+            $line = $failure->line();
+
+            if ($line === null) {
+                continue;
+            }
+
+            if (!isset($failedLines[$line])) {
+                $failedLines[$line] = true;
+                $metrics->recordRowFailed();
             }
         }
     }

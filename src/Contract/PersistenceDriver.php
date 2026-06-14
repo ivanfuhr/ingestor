@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ivanfuhr\Ingestor\Contract;
 
+use Ivanfuhr\Ingestor\Metrics\MetricsRecorder;
 use Ivanfuhr\Ingestor\Stage\Stage;
 
 interface PersistenceDriver
@@ -15,7 +16,7 @@ interface PersistenceDriver
      *
      * @return list<Failure>
      */
-    public function ingest(Stage $stage, iterable $rows): array;
+    public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array;
 
     public function release(Stage $stage): void;
 

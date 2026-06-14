@@ -13,6 +13,8 @@ interface ReleasedImport
      */
     public function failures(): array;
 
+    public function metrics(): Metrics;
+
     public function stage(): Stage;
 
     public function context(): Context;

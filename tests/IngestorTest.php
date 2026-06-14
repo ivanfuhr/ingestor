@@ -20,6 +20,7 @@ use Ivanfuhr\Ingestor\Contract\ValidatesRows;
 use Ivanfuhr\Ingestor\Dataset\Dataset;
 use Ivanfuhr\Ingestor\Exception\CannotRelease;
 use Ivanfuhr\Ingestor\Ingestor;
+use Ivanfuhr\Ingestor\Metrics\MetricsRecorder;
 use Ivanfuhr\Ingestor\Schema\Schema;
 use Ivanfuhr\Ingestor\Stage\EmptyStage;
 use Ivanfuhr\Ingestor\Stage\Stage;
@@ -55,7 +56,7 @@ final class IngestorTest extends TestCase
                 return $this->stage = new Stage('stage-1', $definition, ['customers' => 'stage_customers'], $context);
             }
 
-            public function ingest(Stage $stage, iterable $rows): array
+            public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array
             {
                 foreach ($rows as $rowContext) {
                     $this->ingestedRows[] = $rowContext->data();
@@ -128,7 +129,7 @@ final class IngestorTest extends TestCase
                 return $this->stage = new Stage('stage-1', $definition, ['customers' => 'stage_customers'], $context);
             }
 
-            public function ingest(Stage $stage, iterable $rows): array
+            public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array
             {
                 foreach ($rows as $rowContext) {
                     $stage->definition->map($rowContext->data(), $stage->context);
@@ -178,7 +179,7 @@ final class IngestorTest extends TestCase
                 return new Stage('stage-1', $definition, ['customers' => 'stage_customers'], $context);
             }
 
-            public function ingest(Stage $stage, iterable $rows): array
+            public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array
             {
                 foreach ($rows as $rowContext) {
                     $dataset = $stage->definition->map($rowContext->data(), $stage->context);
@@ -234,7 +235,7 @@ final class IngestorTest extends TestCase
                 return new Stage('stage-1', $definition, ['customers' => 'stage_customers'], $context);
             }
 
-            public function ingest(Stage $stage, iterable $rows): array
+            public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array
             {
                 foreach ($rows as $rowContext) {
                     $dataset = $stage->definition->map($rowContext->data(), $stage->context);
@@ -337,7 +338,7 @@ final class IngestorTest extends TestCase
                 return new Stage('stage-1', $definition, ['customers' => 'stage_customers'], $context);
             }
 
-            public function ingest(Stage $stage, iterable $rows): array
+            public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array
             {
                 foreach ($rows as $rowContext) {
                     $stage->definition->map($rowContext->data(), $stage->context);
@@ -383,7 +384,7 @@ final class IngestorTest extends TestCase
                 return new Stage('stage-1', $definition, ['customers' => 'stage_customers'], $context);
             }
 
-            public function ingest(Stage $stage, iterable $rows): array
+            public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array
             {
                 return [
                     \Ivanfuhr\Ingestor\Persistence\Failure::fromException(
@@ -577,7 +578,7 @@ final class IngestorTest extends TestCase
                 return new Stage('stage-1', $definition, ['customers' => 'stage_customers'], $context);
             }
 
-            public function ingest(Stage $stage, iterable $rows): array
+            public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array
             {
                 return [];
             }
@@ -645,7 +646,7 @@ final class IngestorTest extends TestCase
                 return new Stage('stage-1', $definition, ['customers' => 'stage_customers'], $context);
             }
 
-            public function ingest(Stage $stage, iterable $rows): array
+            public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array
             {
                 return [];
             }
@@ -688,7 +689,7 @@ final class IngestorTest extends TestCase
                 return $this->stage = new Stage('stage-1', $definition, ['customers' => 'stage_customers'], $context);
             }
 
-            public function ingest(Stage $stage, iterable $rows): array
+            public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array
             {
                 return [];
             }

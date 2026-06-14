@@ -9,20 +9,32 @@ use Ivanfuhr\Ingestor\Conflict\ConflictType;
 use Ivanfuhr\Ingestor\Contract\Failure;
 use Ivanfuhr\Ingestor\Contract\RowContext;
 use Ivanfuhr\Ingestor\Driver\Persistence\SqlFailureMode;
+use Ivanfuhr\Ingestor\Metrics\MetricsRecorder;
 use Ivanfuhr\Ingestor\Persistence\Failure as PersistenceFailure;
 use Ivanfuhr\Ingestor\Schema\Schema;
 use PDO;
 use PDOException;
 use PDOStatement;
 
-final readonly class PostgresStagingIngestor
+final class PostgresStagingIngestor
 {
+    private const int DIAGNOSTIC_LINEAR_SCAN_THRESHOLD = 1_000;
+
+    /** @var array<string, string> */
+    private array $conflictClauseCache = [];
+
+    /** @var array<string, PDOStatement> */
+    private array $preparedStatementCache = [];
+
+    /** @var array<string, int> */
+    private array $tableRowCountCache = [];
+
     public function __construct(
-        private PDO $pdo,
-        private int $chunkSize,
-        private SqlFailureMode $failureMode,
-        private PostgresIdentifier $identifiers,
-        private PostgresTableIntrospection $introspection,
+        private readonly PDO $pdo,
+        private readonly int $chunkSize,
+        private readonly SqlFailureMode $failureMode,
+        private readonly PostgresIdentifier $identifiers,
+        private readonly PostgresTableIntrospection $introspection,
     ) {
     }
 
@@ -39,6 +51,7 @@ final readonly class PostgresStagingIngestor
         string $dataset,
         array $data,
         RowContext $rowContext,
+        MetricsRecorder $metrics,
     ): array {
         if (!isset($buffers[$table])) {
             $buffers[$table] = new StagingInsertBuffer(
@@ -63,7 +76,7 @@ final readonly class PostgresStagingIngestor
         ++$buffer->count;
 
         if ($buffer->count === $this->chunkSize) {
-            $failures = $this->insertBuffer($table, $buffer);
+            $failures = $this->insertBuffer($table, $buffer, $metrics);
             $buffer->rows = [];
             $buffer->count = 0;
 
@@ -76,36 +89,45 @@ final readonly class PostgresStagingIngestor
     /**
      * @return list<Failure>
      */
-    public function flushBuffer(string $table, StagingInsertBuffer $buffer): array
+    public function flushBuffer(string $table, StagingInsertBuffer $buffer, MetricsRecorder $metrics): array
     {
         if ($buffer->count === 0) {
             return [];
         }
 
-        return $this->insertBuffer($table, $buffer);
+        return $this->insertBuffer($table, $buffer, $metrics);
     }
 
     /**
      * @return list<Failure>
      */
-    private function insertBuffer(string $table, StagingInsertBuffer $buffer): array
+    private function insertBuffer(string $table, StagingInsertBuffer $buffer, MetricsRecorder $metrics): array
     {
         return match ($this->failureMode) {
-            SqlFailureMode::Fast => $this->insertRowsFast($table, $buffer),
-            SqlFailureMode::Diagnostic => $this->insertRowsDiagnostic($table, $buffer),
+            SqlFailureMode::Fast => $this->insertRowsFast($table, $buffer, $metrics),
+            SqlFailureMode::Diagnostic => $this->insertRowsDiagnostic($table, $buffer, $metrics),
         };
     }
 
     /**
      * @return list<Failure>
      */
-    private function insertRowsFast(string $table, StagingInsertBuffer $buffer): array
+    private function insertRowsFast(string $table, StagingInsertBuffer $buffer, MetricsRecorder $metrics): array
     {
+        $rowCount = count($buffer->rows);
+
         try {
             $this->executeChunkedInsert($table, $buffer->columns, $buffer->rows, $buffer->conflict);
+            $metrics->recordPersisted($buffer->dataset, $rowCount);
 
             return [];
         } catch (PDOException $exception) {
+            $metrics->recordDatasetFailure($buffer->dataset, $rowCount);
+
+            for ($i = 0; $i < $rowCount; ++$i) {
+                $metrics->recordRowFailed();
+            }
+
             return [
                 PersistenceFailure::fromException(
                     line: null,
@@ -120,7 +142,7 @@ final readonly class PostgresStagingIngestor
     /**
      * @return list<Failure>
      */
-    private function insertRowsDiagnostic(string $table, StagingInsertBuffer $buffer): array
+    private function insertRowsDiagnostic(string $table, StagingInsertBuffer $buffer, MetricsRecorder $metrics): array
     {
         return $this->insertRowsDiagnosticChunk(
             $table,
@@ -128,6 +150,7 @@ final readonly class PostgresStagingIngestor
             $buffer->columns,
             $buffer->rows,
             $buffer->conflict,
+            $metrics,
         );
     }
 
@@ -143,18 +166,25 @@ final readonly class PostgresStagingIngestor
         array $columns,
         array $rows,
         ?ConflictStrategy $conflictStrategy,
+        MetricsRecorder $metrics,
+        int $offset = 0,
+        ?int $length = null,
     ): array {
-        if ($rows === []) {
+        $length ??= count($rows);
+
+        if ($length === 0) {
             return [];
         }
 
         try {
-            $this->executeChunkedInsert($table, $columns, $rows, $conflictStrategy);
+            $this->executeChunkedInsert($table, $columns, $rows, $conflictStrategy, $offset, $length);
+            $metrics->recordPersisted($dataset, $length);
 
             return [];
         } catch (PDOException $exception) {
-            if (count($rows) === 1) {
-                $row = $rows[0];
+            if ($length === 1) {
+                $row = $rows[$offset];
+                $metrics->recordDatasetFailure($dataset);
 
                 return [
                     PersistenceFailure::fromException(
@@ -166,13 +196,84 @@ final readonly class PostgresStagingIngestor
                 ];
             }
 
-            $midpoint = (int) ceil(count($rows) / 2);
+            if ($this->shouldUseLinearDiagnostic($table, $conflictStrategy)) {
+                return $this->insertRowsDiagnosticLinear(
+                    $table,
+                    $dataset,
+                    $columns,
+                    $rows,
+                    $conflictStrategy,
+                    $metrics,
+                    $offset,
+                    $length,
+                );
+            }
+
+            $midpoint = (int) ceil($length / 2);
 
             return [
-                ...$this->insertRowsDiagnosticChunk($table, $dataset, $columns, array_slice($rows, 0, $midpoint), $conflictStrategy),
-                ...$this->insertRowsDiagnosticChunk($table, $dataset, $columns, array_slice($rows, $midpoint), $conflictStrategy),
+                ...$this->insertRowsDiagnosticChunk(
+                    $table,
+                    $dataset,
+                    $columns,
+                    $rows,
+                    $conflictStrategy,
+                    $metrics,
+                    $offset,
+                    $midpoint,
+                ),
+                ...$this->insertRowsDiagnosticChunk(
+                    $table,
+                    $dataset,
+                    $columns,
+                    $rows,
+                    $conflictStrategy,
+                    $metrics,
+                    $offset + $midpoint,
+                    $length - $midpoint,
+                ),
             ];
         }
+    }
+
+    /**
+     * @param list<string> $columns
+     * @param list<array{context: RowContext, values: list<mixed>}> $rows
+     *
+     * @return list<Failure>
+     */
+    private function insertRowsDiagnosticLinear(
+        string $table,
+        string $dataset,
+        array $columns,
+        array $rows,
+        ?ConflictStrategy $conflictStrategy,
+        MetricsRecorder $metrics,
+        int $offset,
+        int $length,
+    ): array {
+        /** @var list<Failure> $failures */
+        $failures = [];
+
+        for ($index = $offset; $index < $offset + $length; ++$index) {
+            $row = $rows[$index];
+
+            try {
+                $this->executeChunkedInsert($table, $columns, $rows, $conflictStrategy, $index, 1);
+                $metrics->recordPersisted($dataset, 1);
+            } catch (PDOException $exception) {
+                $metrics->recordDatasetFailure($dataset);
+
+                $failures[] = PersistenceFailure::fromException(
+                    line: $row['context']->line(),
+                    dataset: $dataset,
+                    data: $row['context']->data(),
+                    cause: $exception,
+                );
+            }
+        }
+
+        return $failures;
     }
 
     /**
@@ -184,14 +285,17 @@ final readonly class PostgresStagingIngestor
         array $columns,
         array $rows,
         ?ConflictStrategy $conflictStrategy,
+        int $offset = 0,
+        ?int $length = null,
     ): void {
+        $length ??= count($rows);
         $values = [];
 
-        foreach ($rows as $row) {
-            array_push($values, ...$row['values']);
+        for ($index = $offset; $index < $offset + $length; ++$index) {
+            array_push($values, ...$rows[$index]['values']);
         }
 
-        $pdoStatement = $this->prepareChunkedStatement($table, $columns, count($rows), $conflictStrategy);
+        $pdoStatement = $this->prepareChunkedStatement($table, $columns, $length, $conflictStrategy);
         $pdoStatement->execute($values);
     }
 
@@ -204,6 +308,26 @@ final readonly class PostgresStagingIngestor
         int $rowCount,
         ?ConflictStrategy $conflictStrategy,
     ): PDOStatement {
+        $sql = $this->buildInsertSql($table, $columns, $rowCount, $conflictStrategy);
+
+        if (isset($this->preparedStatementCache[$sql])) {
+            return $this->preparedStatementCache[$sql];
+        }
+
+        $statement = $this->pdo->prepare($sql);
+
+        return $this->preparedStatementCache[$sql] = $statement;
+    }
+
+    /**
+     * @param list<string> $columns
+     */
+    private function buildInsertSql(
+        string $table,
+        array $columns,
+        int $rowCount,
+        ?ConflictStrategy $conflictStrategy,
+    ): string {
         $columnCount = count($columns);
         $rowPlaceholder = '(' . implode(', ', array_fill(0, $columnCount, '?')) . ')';
         $placeholders = implode(', ', array_fill(0, $rowCount, $rowPlaceholder));
@@ -216,13 +340,24 @@ final readonly class PostgresStagingIngestor
         );
 
         if (!$conflictStrategy instanceof ConflictStrategy || $conflictStrategy->type() === ConflictType::Fail) {
-            return $this->pdo->prepare($sql);
+            return $sql;
+        }
+
+        return $sql . $this->conflictClause($table, $conflictStrategy);
+    }
+
+    private function conflictClause(string $table, ConflictStrategy $conflictStrategy): string
+    {
+        $cacheKey = $table . "\0" . $conflictStrategy->type()->name . "\0" . $conflictStrategy->column();
+
+        if (isset($this->conflictClauseCache[$cacheKey])) {
+            return $this->conflictClauseCache[$cacheKey];
         }
 
         $conflictColumn = $this->identifiers->quote($conflictStrategy->column());
         $tableColumns = $this->introspection->columns($table);
 
-        $sql .= match ($conflictStrategy->type()) {
+        $clause = match ($conflictStrategy->type()) {
             ConflictType::Ignore => sprintf(' ON CONFLICT (%s) DO NOTHING', $conflictColumn),
             ConflictType::Update => sprintf(
                 ' ON CONFLICT (%s) DO UPDATE SET %s',
@@ -248,8 +383,43 @@ final readonly class PostgresStagingIngestor
                     $tableColumns,
                 )),
             ),
+            ConflictType::Fail => '',
         };
 
-        return $this->pdo->prepare($sql);
+        return $this->conflictClauseCache[$cacheKey] = $clause;
+    }
+
+    private function shouldUseLinearDiagnostic(string $table, ?ConflictStrategy $conflictStrategy): bool
+    {
+        if (!$conflictStrategy instanceof ConflictStrategy) {
+            return false;
+        }
+
+        if (!match ($conflictStrategy->type()) {
+            ConflictType::Update, ConflictType::Replace => true,
+            default => false,
+        }) {
+            return false;
+        }
+
+        return $this->tableRowCount($table) > self::DIAGNOSTIC_LINEAR_SCAN_THRESHOLD;
+    }
+
+    private function tableRowCount(string $table): int
+    {
+        if (isset($this->tableRowCountCache[$table])) {
+            return $this->tableRowCountCache[$table];
+        }
+
+        $statement = $this->pdo->query(sprintf(
+            'SELECT COUNT(*) FROM %s',
+            $this->identifiers->quote($table),
+        ));
+
+        if ($statement === false) {
+            return 0;
+        }
+
+        return $this->tableRowCountCache[$table] = (int) $statement->fetchColumn();
     }
 }

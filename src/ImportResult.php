@@ -9,6 +9,7 @@ use Ivanfuhr\Ingestor\Contract\BeforeRelease;
 use Ivanfuhr\Ingestor\Contract\Context;
 use Ivanfuhr\Ingestor\Contract\Failure;
 use Ivanfuhr\Ingestor\Contract\ImportedImport;
+use Ivanfuhr\Ingestor\Contract\Metrics;
 use Ivanfuhr\Ingestor\Contract\PersistenceDriver;
 use Ivanfuhr\Ingestor\Stage\Stage;
 
@@ -20,6 +21,7 @@ final readonly class ImportResult implements ImportedImport
     public function __construct(
         private PersistenceDriver $persistence,
         private Stage $stage,
+        private Metrics $metrics,
         private array $failures = [],
     ) {
     }
@@ -35,6 +37,11 @@ final readonly class ImportResult implements ImportedImport
     public function hasFailures(): bool
     {
         return $this->failures !== [];
+    }
+
+    public function metrics(): Metrics
+    {
+        return $this->metrics;
     }
 
     public function context(): Context
@@ -53,7 +60,7 @@ final readonly class ImportResult implements ImportedImport
         $this->persistence->release($this->stage);
 
         if ($definition instanceof AfterRelease) {
-            $definition->afterRelease(new ReleasedImport($this->stage, $this->failures));
+            $definition->afterRelease(new ReleasedImport($this->stage, $this->failures, $this->metrics));
         }
     }
 

@@ -32,25 +32,33 @@ final readonly class PostgresStageBootstrap
             $stagingTables[$datasetName] = $stagingTable;
 
             if ($datasetConfig->stageStrategy instanceof PrefilledStage) {
-                $sql = sprintf(
-                    'CREATE UNLOGGED TABLE %s AS TABLE %s',
-                    $this->identifiers->quote($stagingTable),
-                    $this->identifiers->quote($datasetName),
-                );
+                $quotedStagingTable = $this->identifiers->quote($stagingTable);
+                $quotedDataset = $this->identifiers->quote($datasetName);
+
+                $this->pdo->exec(sprintf(
+                    'CREATE UNLOGGED TABLE %s (LIKE %s INCLUDING ALL)',
+                    $quotedStagingTable,
+                    $quotedDataset,
+                ));
+                $this->pdo->exec(sprintf(
+                    'INSERT INTO %s SELECT * FROM %s',
+                    $quotedStagingTable,
+                    $quotedDataset,
+                ));
             } elseif ($datasetConfig->stageStrategy instanceof EmptyStage) {
                 $sql = sprintf(
                     'CREATE UNLOGGED TABLE %s (LIKE %s INCLUDING ALL)',
                     $this->identifiers->quote($stagingTable),
                     $this->identifiers->quote($datasetName),
                 );
+
+                $this->pdo->exec($sql);
             } else {
                 throw new InvalidArgumentException(sprintf(
                     'Unsupported stage strategy for dataset "%s".',
                     $datasetName,
                 ));
             }
-
-            $this->pdo->exec($sql);
         }
 
         return new Stage($stageId, $definition, $stagingTables, $context);

@@ -7,11 +7,14 @@ namespace Ivanfuhr\Ingestor\Driver\Persistence\Postgres;
 use PDO;
 use PDOException;
 
-final readonly class PostgresTableIntrospection
+final class PostgresTableIntrospection
 {
+    /** @var array<string, list<string>> */
+    private array $columnsCache = [];
+
     public function __construct(
-        private PDO $pdo,
-        private PostgresIdentifier $identifiers,
+        private readonly PDO $pdo,
+        private readonly PostgresIdentifier $identifiers,
     ) {
     }
 
@@ -20,6 +23,10 @@ final readonly class PostgresTableIntrospection
      */
     public function columns(string $table): array
     {
+        if (isset($this->columnsCache[$table])) {
+            return $this->columnsCache[$table];
+        }
+
         $statement = $this->pdo->query(sprintf(
             'SELECT column_name FROM information_schema.columns WHERE table_name = %s ORDER BY ordinal_position',
             $this->pdo->quote($this->identifiers->basename($table)),
@@ -32,7 +39,7 @@ final readonly class PostgresTableIntrospection
         /** @var list<string> $columns */
         $columns = $statement->fetchAll(PDO::FETCH_COLUMN);
 
-        return $columns;
+        return $this->columnsCache[$table] = $columns;
     }
 
     public function synchronizeSequences(string $productionTable): void

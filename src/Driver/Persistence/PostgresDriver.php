@@ -16,6 +16,7 @@ use Ivanfuhr\Ingestor\Driver\Persistence\Postgres\PostgresStageBootstrap;
 use Ivanfuhr\Ingestor\Driver\Persistence\Postgres\PostgresStagingIngestor;
 use Ivanfuhr\Ingestor\Driver\Persistence\Postgres\PostgresTableIntrospection;
 use Ivanfuhr\Ingestor\Driver\Persistence\Postgres\StagingInsertBuffer;
+use Ivanfuhr\Ingestor\Metrics\MetricsRecorder;
 use Ivanfuhr\Ingestor\Stage\Stage;
 use PDO;
 use Throwable;
@@ -70,7 +71,7 @@ final readonly class PostgresDriver implements PersistenceDriver
      *
      * @return list<Failure>
      */
-    public function ingest(Stage $stage, iterable $rows): array
+    public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array
     {
         $schema = $stage->definition->schema();
 
@@ -84,22 +85,24 @@ final readonly class PostgresDriver implements PersistenceDriver
             $dataset = $stage->definition->map($rowContext->data(), $stage->context);
 
             foreach ($dataset->mutations() as $mutation) {
-                array_push(
-                    $failures,
-                    ...$this->stagingIngestor->accumulateRow(
-                        $buffers,
-                        $schema,
-                        $stage->stagingTable($mutation->dataset),
-                        $mutation->dataset,
-                        $mutation->data,
-                        $rowContext,
-                    ),
+                $metrics->recordMutation($mutation->dataset);
+
+                $mutationFailures = $this->stagingIngestor->accumulateRow(
+                    $buffers,
+                    $schema,
+                    $stage->stagingTable($mutation->dataset),
+                    $mutation->dataset,
+                    $mutation->data,
+                    $rowContext,
+                    $metrics,
                 );
+
+                array_push($failures, ...$mutationFailures);
             }
         }
 
         foreach ($buffers as $table => $buffer) {
-            array_push($failures, ...$this->stagingIngestor->flushBuffer($table, $buffer));
+            array_push($failures, ...$this->stagingIngestor->flushBuffer($table, $buffer, $metrics));
         }
 
         return $failures;

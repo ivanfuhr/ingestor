@@ -8,7 +8,7 @@ interface Context
 {
     public function put(string $key, mixed $value): void;
 
-    public function get(string $key): mixed;
+    public function get(string $key, mixed $default = null): mixed;
 
     public function has(string $key): bool;
 }

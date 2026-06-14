@@ -64,4 +64,21 @@ final class ArrayContextTest extends TestCase
         $this->assertTrue($context->has('nullable'));
         $this->assertNull($context->get('nullable'));
     }
+
+    #[Test]
+    public function it_returns_default_when_key_is_missing(): void
+    {
+        $context = new ArrayContext();
+
+        $this->assertSame([], $context->get('missing', []));
+        $this->assertSame('fallback', $context->get('missing', 'fallback'));
+    }
+
+    #[Test]
+    public function it_returns_explicit_null_default_when_key_is_missing(): void
+    {
+        $context = new ArrayContext();
+
+        $this->assertNull($context->get('missing', null));
+    }
 }

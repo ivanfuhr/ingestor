@@ -17,10 +17,14 @@ final class ArrayContext implements Context
         $this->data[$key] = $value;
     }
 
-    public function get(string $key): mixed
+    public function get(string $key, mixed $default = null): mixed
     {
         if (!$this->has($key)) {
-            throw new InvalidArgumentException(sprintf('Context key "%s" is not set.', $key));
+            if (func_num_args() < 2) {
+                throw new InvalidArgumentException(sprintf('Context key "%s" is not set.', $key));
+            }
+
+            return $default;
         }
 
         return $this->data[$key];

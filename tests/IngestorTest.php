@@ -275,7 +275,6 @@ final class IngestorTest extends TestCase
         $failures = $result->failures();
         $this->assertTrue($result->hasFailures());
         $this->assertCount(3, $failures);
-        $this->assertSame($failures, $result->errors());
 
         $this->assertSame('document', $failures[0]->field());
         $this->assertSame('Document is required.', $failures[0]->message());

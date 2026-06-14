@@ -29,6 +29,8 @@ final readonly class PostgresStagingIngestor
     /**
      * @param array<string, StagingInsertBuffer> $buffers
      * @param array<string, mixed> $data
+     *
+     * @return list<Failure>
      */
     public function accumulateRow(
         array &$buffers,
@@ -37,7 +39,7 @@ final readonly class PostgresStagingIngestor
         string $dataset,
         array $data,
         RowContext $rowContext,
-    ): void {
+    ): array {
         if (!isset($buffers[$table])) {
             $buffers[$table] = new StagingInsertBuffer(
                 dataset: $dataset,
@@ -61,10 +63,14 @@ final readonly class PostgresStagingIngestor
         ++$buffer->count;
 
         if ($buffer->count === $this->chunkSize) {
-            $this->insertBuffer($table, $buffer);
+            $failures = $this->insertBuffer($table, $buffer);
             $buffer->rows = [];
             $buffer->count = 0;
+
+            return $failures;
         }
+
+        return [];
     }
 
     /**

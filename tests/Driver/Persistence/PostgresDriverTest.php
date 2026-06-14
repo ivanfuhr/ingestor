@@ -280,6 +280,65 @@ CSV);
     }
 
     #[Test]
+    public function it_collects_persistence_failures_when_bad_row_falls_on_chunk_boundary(): void
+    {
+        $definition = new class () implements Definition {
+            public function schema(): Schema
+            {
+                return Schema::make()
+                    ->dataset('customers')
+                        ->using(EmptyStage::class)
+                        ->commit();
+            }
+
+            public function map(array $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('customers', [
+                    'document' => $row['cpf'] === 'BAD' ? null : $row['cpf'],
+                    'name' => $row['name'],
+                ]);
+            }
+        };
+
+        $csv = $this->createCsv(<<<'CSV'
+cpf,name
+111,Ada
+222,Bob
+333,Charlie
+BAD,Broken
+CSV);
+
+        $ingestor = new Ingestor(
+            new PostgresDriver($this->pdo, chunkSize: 2, failureMode: SqlFailureMode::Diagnostic),
+            new CsvDriver(),
+        );
+
+        $result = $ingestor
+            ->for($definition::class)
+            ->from($csv)
+            ->import();
+
+        $this->assertTrue($result->hasFailures());
+        $this->assertCount(1, $result->failures());
+
+        $failure = $result->failures()[0];
+        $this->assertSame(5, $failure->line());
+        $this->assertSame('customers', $failure->dataset());
+        $this->assertSame(['cpf' => 'BAD', 'name' => 'Broken'], $failure->data());
+        $this->assertStringContainsString('null value in column "document"', $failure->message());
+
+        $result->release();
+
+        $rows = $this->pdo->query('SELECT document, name FROM customers ORDER BY document')->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->assertSame([
+            ['document' => '111', 'name' => 'Ada'],
+            ['document' => '222', 'name' => 'Bob'],
+            ['document' => '333', 'name' => 'Charlie'],
+        ], $rows);
+    }
+
+    #[Test]
     public function it_collects_batch_failures_in_fast_mode(): void
     {
         $definition = new class () implements Definition {

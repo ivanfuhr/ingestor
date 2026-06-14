@@ -37,14 +37,6 @@ final readonly class ImportResult implements ImportedImport
         return $this->failures !== [];
     }
 
-    /**
-     * @return list<Failure>
-     */
-    public function errors(): array
-    {
-        return $this->failures;
-    }
-
     public function context(): Context
     {
         return $this->stage->context;

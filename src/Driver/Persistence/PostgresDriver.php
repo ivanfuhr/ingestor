@@ -77,23 +77,26 @@ final readonly class PostgresDriver implements PersistenceDriver
         /** @var array<string, StagingInsertBuffer> $buffers */
         $buffers = [];
 
+        /** @var list<Failure> $failures */
+        $failures = [];
+
         foreach ($rows as $rowContext) {
             $dataset = $stage->definition->map($rowContext->data(), $stage->context);
 
             foreach ($dataset->mutations() as $mutation) {
-                $this->stagingIngestor->accumulateRow(
-                    $buffers,
-                    $schema,
-                    $stage->stagingTable($mutation->dataset),
-                    $mutation->dataset,
-                    $mutation->data,
-                    $rowContext,
+                array_push(
+                    $failures,
+                    ...$this->stagingIngestor->accumulateRow(
+                        $buffers,
+                        $schema,
+                        $stage->stagingTable($mutation->dataset),
+                        $mutation->dataset,
+                        $mutation->data,
+                        $rowContext,
+                    ),
                 );
             }
         }
-
-        /** @var list<Failure> $failures */
-        $failures = [];
 
         foreach ($buffers as $table => $buffer) {
             array_push($failures, ...$this->stagingIngestor->flushBuffer($table, $buffer));

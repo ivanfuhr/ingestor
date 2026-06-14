@@ -178,7 +178,7 @@ $import = $ingestor
     ->from($file)
     ->import();
 
-$import->errors();
+$import->failures();
 ```
 
 Isso permite:

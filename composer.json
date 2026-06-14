@@ -1,0 +1,38 @@
+{
+    "name": "ivanfuhr/ingestor",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Ivanfuhr\\Ingestor\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Ivanfuhr\\Ingestor\\Tests\\": "tests/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Ivan Führ",
+            "email": "dev.ivanfuhr@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^8.2"
+    },
+    "require-dev": {
+        "phpstan/phpstan": "^2.2",
+        "rector/rector": "^2.4",
+        "phpunit/phpunit": "^13.2",
+        "friendsofphp/php-cs-fixer": "^3.95"
+    },
+    "scripts": {
+        "lint": "php-cs-fixer check",
+        "lint:fix": "php-cs-fixer fix",
+        "phpstan": "phpstan analyse",
+        "rector": "rector process",
+        "rector:check": "rector process --dry-run",
+        "test": "phpunit"
+    }
+}

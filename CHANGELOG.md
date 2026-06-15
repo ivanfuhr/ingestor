@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Core import pipeline with `Ingestor`, `Definition`, `Schema`, `Dataset`, and `Stage`
 - Source driver: `CsvDriver`
+- Source driver: `XlsxDriver` — zero Composer dependencies; streams sheet XML via `XMLReader` and `zip://`; worksheet selection via `XlsxSheet::byName()` / `byIndex()`
+- PHP extensions: `ext-xml` and `ext-zip` (required for XLSX)
 - Persistence driver: `PostgresDriver` with staging, batch inserts, and atomic release
 - Context and `Preparable` for preloading reference data
 - Row validation via `ValidatesRows` with `ERROR` and `WARNING` severities

@@ -14,7 +14,7 @@ Ingestor is a PHP library for **safe, auditable data imports** with isolated sta
 
 Data enters through a source driver, is transformed into mutations by a definition, is applied in an isolated stage by a persistence driver, and is only then promoted to production — safely and atomically.
 
-> **Requires [PHP 8.2+](https://php.net/releases/)** and the **PDO** extension.
+> **Requires [PHP 8.2+](https://php.net/releases/)**, the **PDO** extension (persistence), and the **zip** and **xml** extensions (XLSX source).
 
 ## Installation
 
@@ -66,6 +66,7 @@ $import->release();
 - [Testing Utilities](#-testing-utilities)
 - [PostgreSQL Driver](#-postgresql-driver)
 - [CSV Driver](#-csv-driver)
+- [XLSX Driver](#-xlsx-driver)
 - [Development](#-development)
 - [Community](#community)
 - [License](#license)
@@ -94,7 +95,7 @@ Release (atomic promotion)
 
 | Driver | Responsibility | Implementations |
 |--------|----------------|-----------------|
-| **Source** | Turns a source into input rows | `CsvDriver` |
+| **Source** | Turns a source into input rows | `CsvDriver`, `XlsxDriver` |
 | **Persistence** | Creates staging, persists mutations, and releases | `PostgresDriver` |
 
 Drivers are injected at construction time. The import pipeline never needs to know how data is read or written.
@@ -379,7 +380,7 @@ Failures answer *what* and *why*. Metrics answer *how much* and *how long*.
 
 ### 🧪 Testing Utilities
 
-Test definitions in isolation — no database, no CSV files, no external infrastructure.
+Test definitions in isolation — no database, no CSV or XLSX files, no external infrastructure.
 
 #### Asserting the Schema
 
@@ -465,6 +466,41 @@ $ingestor = Ingestor::make($persistence, new CsvDriver());
 ```
 
 **Why:** Line numbers flow through the entire pipeline, enabling precise failure reporting back to the source file.
+
+---
+
+### 📊 XLSX Driver
+
+`XlsxDriver` reads Excel `.xlsx` files with a header row and yields `RowContext` objects with line numbers and associative data — same API as `CsvDriver`.
+
+It has **zero Composer dependencies**: the file is opened as a ZIP archive and parsed incrementally with `XMLReader`, keeping memory use low for large sheets.
+
+```php
+use Ivanfuhr\Ingestor\Driver\Source\XlsxDriver;
+use Ivanfuhr\Ingestor\Driver\Source\XlsxSheet;
+
+// First worksheet (default)
+$ingestor = Ingestor::make($persistence, new XlsxDriver());
+
+$ingestor
+    ->for(CustomerImport::class)
+    ->from('/path/to/customers.xlsx')
+    ->import();
+
+// Select a worksheet by name or zero-based index
+new XlsxDriver(XlsxSheet::byName('Orders'));
+new XlsxDriver(XlsxSheet::byIndex(1));
+```
+
+| Feature | Support |
+|---------|---------|
+| Shared strings | Yes |
+| Inline strings | Yes |
+| Booleans and formula cached values | Yes |
+| Excel serial dates | Returned as raw numbers |
+| Multiple sheets | One sheet per driver instance |
+
+**Why:** Spreadsheet imports get the same DX and traceability as CSV — header-based associative rows and Excel row numbers for failure reporting — without pulling in PhpSpreadsheet or similar.
 
 ---
 

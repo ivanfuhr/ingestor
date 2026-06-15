@@ -19,7 +19,7 @@ Source → SourceDriver → Iterable<RowContext>
 
 | Layer | Role | Built-ins |
 |-------|------|-----------|
-| **Source driver** | Read input into rows | `CsvDriver` |
+| **Source driver** | Read input into rows | `CsvDriver`, `XlsxDriver` |
 | **Definition** | Schema + row → mutations | User implements `Definition` |
 | **Persistence driver** | Stage, persist, promote | `PostgresDriver` |
 
@@ -113,7 +113,7 @@ beforeImport → prepare → validate/map/persist → afterImport
 
 ## Testing
 
-Prefer `Ingestor::test()` — no database or CSV required.
+Prefer `Ingestor::test()` — no database, CSV, or XLSX required.
 
 ```php
 // Schema
@@ -148,7 +148,7 @@ In-memory drivers live in `src/Testing/` (`InMemoryPersistenceDriver`, `InMemory
 | `src/Schema/` | `Schema`, dataset builders |
 | `src/Stage/` | `EmptyStage`, `PrefilledStage` |
 | `src/Conflict/` | Conflict strategy value objects |
-| `src/Driver/Source/` | `CsvDriver` |
+| `src/Driver/Source/` | `CsvDriver`, `XlsxDriver`, `XlsxSheet` |
 | `src/Driver/Persistence/` | `PostgresDriver`, `SqlFailureMode` |
 | `src/Testing/` | `DefinitionTest`, `Assert`, in-memory drivers |
 | `src/Validation/` | `Failure`, `Severity` |

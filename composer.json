@@ -20,7 +20,9 @@
     ],
     "require": {
         "php": "^8.2",
-        "ext-pdo": "*"
+        "ext-pdo": "*",
+        "ext-xml": "*",
+        "ext-zip": "*"
     },
     "require-dev": {
         "phpstan/phpstan": "^2.2",

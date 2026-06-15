@@ -21,6 +21,7 @@ use Ivanfuhr\Ingestor\Contract\RowContext;
 use Ivanfuhr\Ingestor\Contract\SourceDriver;
 use Ivanfuhr\Ingestor\Contract\ValidatesRows;
 use Ivanfuhr\Ingestor\Metrics\MetricsRecorder;
+use Ivanfuhr\Ingestor\Testing\DefinitionTest;
 use Ivanfuhr\Ingestor\Validation\Severity;
 
 final class Ingestor implements IngestorContract
@@ -32,6 +33,21 @@ final class Ingestor implements IngestorContract
     public static function make(PersistenceDriver $persistence, SourceDriver $source): self
     {
         return new self($persistence, $source);
+    }
+
+    /**
+     * @param class-string<Definition> $definitionClass
+     */
+    public static function test(string $definitionClass): DefinitionTest
+    {
+        if (!is_subclass_of($definitionClass, Definition::class) && $definitionClass !== Definition::class) {
+            throw new InvalidArgumentException(sprintf('"%s" must implement Definition.', $definitionClass));
+        }
+
+        /** @var Definition $instance */
+        $instance = new $definitionClass();
+
+        return DefinitionTest::for($instance);
     }
 
     private function __construct(

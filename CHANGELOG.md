@@ -1,0 +1,22 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+
+- Core import pipeline with `Ingestor`, `Definition`, `Schema`, `Dataset`, and `Stage`
+- Source driver: `CsvDriver`
+- Persistence driver: `PostgresDriver` with staging, batch inserts, and atomic release
+- Context and `Preparable` for preloading reference data
+- Row validation via `ValidatesRows` with `ERROR` and `WARNING` severities
+- Persistence failure diagnostics with `Fast` and `Diagnostic` SQL modes
+- Lifecycle hooks: `BeforeImport`, `AfterImport`, `BeforeRelease`, `AfterRelease`
+- Import metrics: duration, row counts, mutations, and per-dataset breakdown
+- Testing utilities via `Ingestor::test()` with fluent assertions
+- Conflict strategies: `UpdateOnConflict`, `IgnoreOnConflict`, `ReplaceOnConflict`, `FailOnConflict`
+- Stage strategies: `EmptyStage`, `PrefilledStage`

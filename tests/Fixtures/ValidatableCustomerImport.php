@@ -43,10 +43,7 @@ final class ValidatableCustomerImport implements Definition, Preparable, Validat
                 ->message('Phone number is empty.');
         }
 
-        /** @var array<string, bool> $cities */
-        $cities = $context->get('cities');
-
-        if ($row->filled('city') && !isset($cities[$row->string('city')])) {
+        if ($row->filled('city') && !$context->has('cities', $row->string('city'))) {
             yield Failure::error('city')
                 ->message('City not found.');
         }

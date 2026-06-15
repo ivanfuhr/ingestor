@@ -31,13 +31,10 @@ final class PreparableCustomerImport implements Definition, Preparable
 
     public function map(Row $row, Context $context): Dataset
     {
-        /** @var array<string, int> $customers */
-        $customers = $context->get('customers');
-
         return Dataset::make()->insert('customers', [
             'document' => $row->string('document'),
             'name' => $row->string('name'),
-            'customer_id' => $customers[$row->string('document')] ?? null,
+            'customer_id' => $context->get('customers', $row->string('document')),
         ]);
     }
 }

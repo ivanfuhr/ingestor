@@ -81,4 +81,83 @@ final class ArrayContextTest extends TestCase
 
         $this->assertNull($context->get('missing', null));
     }
+
+    #[Test]
+    public function it_looks_up_values_in_a_store(): void
+    {
+        $context = new ArrayContext();
+
+        $context->put('orders', ['ORD-1' => 42, 'ORD-2' => 99]);
+
+        $this->assertSame(42, $context->get('orders', 'ORD-1'));
+        $this->assertSame(99, $context->get('orders', 'ORD-2'));
+        $this->assertNull($context->get('orders', 'ORD-999'));
+    }
+
+    #[Test]
+    public function it_returns_default_when_lookup_key_is_missing(): void
+    {
+        $context = new ArrayContext();
+
+        $context->put('orders', ['ORD-1' => 42]);
+
+        $this->assertSame(0, $context->get('orders', 'ORD-999', 0));
+        $this->assertSame('unknown', $context->get('orders', 'ORD-999', 'unknown'));
+    }
+
+    #[Test]
+    public function it_returns_default_when_lookup_store_is_missing(): void
+    {
+        $context = new ArrayContext();
+
+        $this->assertSame(0, $context->get('orders', 'ORD-1', 0));
+        $this->assertNull($context->get('orders', 'ORD-1', null));
+    }
+
+    #[Test]
+    public function it_returns_null_for_null_lookup_keys(): void
+    {
+        $context = new ArrayContext();
+
+        $context->put('orders', ['ORD-1' => 42]);
+
+        $this->assertNull($context->get('orders', null));
+        $this->assertSame(0, $context->get('orders', null, 0));
+    }
+
+    #[Test]
+    public function it_throws_when_lookup_target_is_not_an_array(): void
+    {
+        $context = new ArrayContext();
+
+        $context->put('marker', 'ready');
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Context key "marker" is not a lookup map.');
+
+        $context->get('marker', 'key', 'fallback');
+    }
+
+    #[Test]
+    public function it_ignores_non_lookup_second_argument_when_store_exists(): void
+    {
+        $context = new ArrayContext();
+
+        $context->put('customers', ['111' => 1]);
+
+        $this->assertSame(['111' => 1], $context->get('customers', []));
+    }
+
+    #[Test]
+    public function it_checks_lookup_keys_with_has(): void
+    {
+        $context = new ArrayContext();
+
+        $context->put('cities', ['SP' => true, 'RJ' => true]);
+
+        $this->assertTrue($context->has('cities', 'SP'));
+        $this->assertFalse($context->has('cities', 'MG'));
+        $this->assertFalse($context->has('cities', null));
+        $this->assertFalse($context->has('missing', 'SP'));
+    }
 }

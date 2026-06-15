@@ -22,11 +22,8 @@ final class ContextualCustomerImport implements Definition
 
     public function map(Row $row, Context $context): Dataset
     {
-        /** @var array<string, int> $customers */
-        $customers = $context->get('customers');
-
         return Dataset::make()->insert('customers', [
-            'customer_id' => $customers[$row->string('customer_unique_id')] ?? null,
+            'customer_id' => $context->get('customers', $row->string('customer_unique_id')),
             'customer_unique_id' => $row->string('customer_unique_id'),
         ]);
     }

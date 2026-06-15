@@ -57,8 +57,7 @@ public function prepare(Context $context): void
 
 public function map(Row $row, Context $context): Dataset
 {
-    $customers = $context->get('customers');
-    // $row->line(), $row->string('document'), $row->get('total'), etc.
+    // $row->line(), $row->string('document'), $context->get('customers', $row->string('document')), etc.
 }
 ```
 

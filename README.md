@@ -199,10 +199,8 @@ final class OrderImport implements Definition, Preparable
 
     public function map(Row $row, Context $context): Dataset
     {
-        $customers = $context->get('customers');
-
         return Dataset::make()->insert('orders', [
-            'customer_id' => $customers[$row->string('document')] ?? null,
+            'customer_id' => $context->get('customers', $row->string('document')),
             'total' => $row->float('total'),
         ]);
     }

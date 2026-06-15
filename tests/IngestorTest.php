@@ -269,7 +269,7 @@ final class IngestorTest extends TestCase
             [
                 'document' => '111',
                 'name' => 'Valid',
-                'phone' => '',
+                'phone' => null,
                 'city' => 'SP',
             ],
         ], $persistence->mappedRows);

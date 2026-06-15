@@ -9,6 +9,7 @@ use Ivanfuhr\Ingestor\Contract\Definition;
 use Ivanfuhr\Ingestor\Contract\Preparable;
 use Ivanfuhr\Ingestor\Contract\ValidatesRows;
 use Ivanfuhr\Ingestor\Dataset\Dataset;
+use Ivanfuhr\Ingestor\Row\Row;
 use Ivanfuhr\Ingestor\Schema\Schema;
 use Ivanfuhr\Ingestor\Stage\EmptyStage;
 use Ivanfuhr\Ingestor\Validation\Failure;
@@ -30,17 +31,14 @@ final class ValidatableCustomerImport implements Definition, Preparable, Validat
         ]);
     }
 
-    /**
-     * @param array<string, mixed> $row
-     */
-    public function validate(array $row, Context $context): iterable
+    public function validate(Row $row, Context $context): iterable
     {
-        if (empty($row['document'])) {
+        if ($row->missing('document')) {
             yield Failure::error('document')
                 ->message('Document is required.');
         }
 
-        if (empty($row['phone'])) {
+        if ($row->missing('phone')) {
             yield Failure::warning('phone')
                 ->message('Phone number is empty.');
         }
@@ -48,22 +46,19 @@ final class ValidatableCustomerImport implements Definition, Preparable, Validat
         /** @var array<string, bool> $cities */
         $cities = $context->get('cities');
 
-        if (isset($row['city']) && !isset($cities[$row['city']])) {
+        if ($row->filled('city') && !isset($cities[$row->string('city')])) {
             yield Failure::error('city')
                 ->message('City not found.');
         }
     }
 
-    /**
-     * @param array<string, mixed> $row
-     */
-    public function map(array $row, Context $context): Dataset
+    public function map(Row $row, Context $context): Dataset
     {
         return Dataset::make()->insert('customers', [
-            'document' => $row['document'],
-            'name' => $row['name'],
-            'phone' => $row['phone'] ?? null,
-            'city' => $row['city'] ?? null,
+            'document' => $row->string('document'),
+            'name' => $row->string('name'),
+            'phone' => $row->string('phone'),
+            'city' => $row->string('city'),
         ]);
     }
 }

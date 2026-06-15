@@ -31,14 +31,15 @@ foreach ($m->datasets() as $ds) {
 
 ```php
 use Ivanfuhr\Ingestor\Contract\ValidatesRows;
+use Ivanfuhr\Ingestor\Row\Row;
 use Ivanfuhr\Ingestor\Validation\Failure;
 
-public function validate(array $row, Context $context): iterable
+public function validate(Row $row, Context $context): iterable
 {
-    if (empty($row['document'])) {
+    if ($row->missing('document')) {
         yield Failure::error('document')->message('Document is required.');
     }
-    if (empty($row['phone'])) {
+    if ($row->missing('phone')) {
         yield Failure::warning('phone')->message('Phone number is empty.');
     }
 }
@@ -54,10 +55,10 @@ public function prepare(Context $context): void
     $context->put('customers', Customer::pluck('id', 'document')->all());
 }
 
-public function map(array $row, Context $context): Dataset
+public function map(Row $row, Context $context): Dataset
 {
     $customers = $context->get('customers');
-    // ...
+    // $row->line(), $row->string('document'), $row->get('total'), etc.
 }
 ```
 
@@ -128,9 +129,9 @@ new PostgresDriver(
 
 | Interface | Method(s) |
 |-----------|-----------|
-| `Definition` | `schema()`, `map()` |
+| `Definition` | `schema()`, `map(Row, Context)` |
 | `Preparable` | `prepare(Context)` |
-| `ValidatesRows` | `validate()` → iterable failures |
+| `ValidatesRows` | `validate(Row, Context)` → iterable failures |
 | `SourceDriver` | `read(mixed): iterable<RowContext>` |
 | `PersistenceDriver` | stage lifecycle, persist, release, rollback |
 | `BeforeImport` / `AfterImport` | import boundaries |

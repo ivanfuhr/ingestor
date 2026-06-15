@@ -8,6 +8,7 @@ use Ivanfuhr\Ingestor\Contract\Context;
 use Ivanfuhr\Ingestor\Contract\Definition;
 use Ivanfuhr\Ingestor\Contract\PersistenceDriver;
 use Ivanfuhr\Ingestor\Metrics\MetricsRecorder;
+use Ivanfuhr\Ingestor\Row\Row;
 use Ivanfuhr\Ingestor\Stage\Stage;
 
 final class InMemoryPersistenceDriver implements PersistenceDriver
@@ -26,7 +27,7 @@ final class InMemoryPersistenceDriver implements PersistenceDriver
     public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array
     {
         foreach ($rows as $rowContext) {
-            $dataset = $stage->definition->map($rowContext->data(), $stage->context);
+            $dataset = $stage->definition->map(Row::fromContext($rowContext), $stage->context);
 
             foreach ($dataset->mutations() as $mutation) {
                 $metrics->recordMutation($mutation->dataset);

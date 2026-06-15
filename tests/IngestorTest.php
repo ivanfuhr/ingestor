@@ -21,6 +21,7 @@ use Ivanfuhr\Ingestor\Dataset\Dataset;
 use Ivanfuhr\Ingestor\Exception\CannotRelease;
 use Ivanfuhr\Ingestor\Ingestor;
 use Ivanfuhr\Ingestor\Metrics\MetricsRecorder;
+use Ivanfuhr\Ingestor\Row\Row;
 use Ivanfuhr\Ingestor\Schema\Schema;
 use Ivanfuhr\Ingestor\Stage\EmptyStage;
 use Ivanfuhr\Ingestor\Stage\Stage;
@@ -104,13 +105,13 @@ final class IngestorTest extends TestCase
                 $context->put('marker', 'ready');
             }
 
-            public function map(array $row, Context $context): Dataset
+            public function map(Row $row, Context $context): Dataset
             {
                 if (!$context->has('marker')) {
                     throw new \RuntimeException('Context was not prepared before mapping.');
                 }
 
-                return Dataset::make()->insert('customers', $row);
+                return Dataset::make()->insert('customers', $row->toArray());
             }
         };
 
@@ -132,7 +133,7 @@ final class IngestorTest extends TestCase
             public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array
             {
                 foreach ($rows as $rowContext) {
-                    $stage->definition->map($rowContext->data(), $stage->context);
+                    $stage->definition->map(Row::fromContext($rowContext), $stage->context);
                 }
 
                 return [];
@@ -182,7 +183,7 @@ final class IngestorTest extends TestCase
             public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array
             {
                 foreach ($rows as $rowContext) {
-                    $dataset = $stage->definition->map($rowContext->data(), $stage->context);
+                    $dataset = $stage->definition->map(Row::fromContext($rowContext), $stage->context);
 
                     foreach ($dataset->mutations() as $mutation) {
                         $this->mappedRows[] = $mutation->data;
@@ -238,7 +239,7 @@ final class IngestorTest extends TestCase
             public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array
             {
                 foreach ($rows as $rowContext) {
-                    $dataset = $stage->definition->map($rowContext->data(), $stage->context);
+                    $dataset = $stage->definition->map(Row::fromContext($rowContext), $stage->context);
 
                     foreach ($dataset->mutations() as $mutation) {
                         $this->mappedRows[] = $mutation->data;
@@ -308,7 +309,7 @@ final class IngestorTest extends TestCase
                 $context->put('marker', 'ready');
             }
 
-            public function validate(array $row, Context $context): iterable
+            public function validate(Row $row, Context $context): iterable
             {
                 if (!$context->has('marker')) {
                     throw new \RuntimeException('Context was not prepared before validation.');
@@ -319,9 +320,9 @@ final class IngestorTest extends TestCase
                 yield from [];
             }
 
-            public function map(array $row, Context $context): Dataset
+            public function map(Row $row, Context $context): Dataset
             {
-                return Dataset::make()->insert('customers', $row);
+                return Dataset::make()->insert('customers', $row->toArray());
             }
         };
 
@@ -341,7 +342,7 @@ final class IngestorTest extends TestCase
             public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array
             {
                 foreach ($rows as $rowContext) {
-                    $stage->definition->map($rowContext->data(), $stage->context);
+                    $stage->definition->map(Row::fromContext($rowContext), $stage->context);
                 }
 
                 return [];
@@ -452,9 +453,9 @@ final class IngestorTest extends TestCase
                 }
             }
 
-            public function map(array $row, Context $context): Dataset
+            public function map(Row $row, Context $context): Dataset
             {
-                return Dataset::make()->insert('customers', $row);
+                return Dataset::make()->insert('customers', $row->toArray());
             }
         };
 
@@ -498,9 +499,9 @@ final class IngestorTest extends TestCase
                 self::$import = $import;
             }
 
-            public function map(array $row, Context $context): Dataset
+            public function map(Row $row, Context $context): Dataset
             {
-                return Dataset::make()->insert('customers', $row);
+                return Dataset::make()->insert('customers', $row->toArray());
             }
         };
 
@@ -556,9 +557,9 @@ final class IngestorTest extends TestCase
                 self::$afterReleaseImport = $import;
             }
 
-            public function map(array $row, Context $context): Dataset
+            public function map(Row $row, Context $context): Dataset
             {
-                return Dataset::make()->insert('customers', $row);
+                return Dataset::make()->insert('customers', $row->toArray());
             }
         };
 
@@ -625,9 +626,9 @@ final class IngestorTest extends TestCase
                 throw CannotRelease::because('Import contains unresolved failures.');
             }
 
-            public function map(array $row, Context $context): Dataset
+            public function map(Row $row, Context $context): Dataset
             {
-                return Dataset::make()->insert('customers', $row);
+                return Dataset::make()->insert('customers', $row->toArray());
             }
         };
 

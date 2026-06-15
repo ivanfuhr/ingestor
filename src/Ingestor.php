@@ -21,7 +21,9 @@ use Ivanfuhr\Ingestor\Contract\RowContext;
 use Ivanfuhr\Ingestor\Contract\SourceDriver;
 use Ivanfuhr\Ingestor\Contract\ValidatesRows;
 use Ivanfuhr\Ingestor\Metrics\MetricsRecorder;
+use Ivanfuhr\Ingestor\Row\Row;
 use Ivanfuhr\Ingestor\Testing\DefinitionTest;
+use Ivanfuhr\Ingestor\Validation\FailureWithLine;
 use Ivanfuhr\Ingestor\Validation\Severity;
 
 final class Ingestor implements IngestorContract
@@ -163,9 +165,10 @@ final class Ingestor implements IngestorContract
     ): Generator {
         foreach ($rows as $rowContext) {
             $hasError = false;
+            $row = Row::fromContext($rowContext);
 
-            foreach ($definition->validate($rowContext->data(), $context) as $failure) {
-                $failures[] = $failure;
+            foreach ($definition->validate($row, $context) as $failure) {
+                $failures[] = FailureWithLine::from($failure, $row->line());
 
                 if ($failure->severity() === Severity::ERROR) {
                     $hasError = true;

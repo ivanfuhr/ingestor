@@ -7,6 +7,7 @@ namespace Ivanfuhr\Ingestor\Tests\Fixtures;
 use Ivanfuhr\Ingestor\Contract\Context;
 use Ivanfuhr\Ingestor\Contract\Definition;
 use Ivanfuhr\Ingestor\Dataset\Dataset;
+use Ivanfuhr\Ingestor\Row\Row;
 use Ivanfuhr\Ingestor\Schema\Schema;
 use Ivanfuhr\Ingestor\Stage\EmptyStage;
 
@@ -21,21 +22,18 @@ final class OrderImport implements Definition
                 ->using(EmptyStage::class);
     }
 
-    /**
-     * @param array<string, mixed> $row
-     */
-    public function map(array $row, Context $context): Dataset
+    public function map(Row $row, Context $context): Dataset
     {
         $dataset = Dataset::make()->insert('orders', [
-            'order_id' => $row['order_id'],
+            'order_id' => $row->string('order_id'),
         ]);
 
         /** @var list<array<string, mixed>> $items */
-        $items = $row['items'];
+        $items = $row->get('items');
 
         foreach ($items as $item) {
             $dataset->insert('order_items', [
-                'order_id' => $row['order_id'],
+                'order_id' => $row->string('order_id'),
                 'product_id' => $item['product_id'],
                 'quantity' => $item['quantity'],
             ]);

@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Ivanfuhr\Ingestor\Contract;
 
+use Ivanfuhr\Ingestor\Row\Row;
+
 interface ValidatesRows
 {
     /**
-     * @param array<string, mixed> $row
-     *
      * @return iterable<int, Failure>
      */
-    public function validate(array $row, Context $context): iterable;
+    public function validate(Row $row, Context $context): iterable;
 }

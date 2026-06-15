@@ -8,6 +8,7 @@ use Ivanfuhr\Ingestor\Contract\Context;
 use Ivanfuhr\Ingestor\Contract\Definition;
 use Ivanfuhr\Ingestor\Contract\Preparable;
 use Ivanfuhr\Ingestor\Dataset\Dataset;
+use Ivanfuhr\Ingestor\Row\Row;
 use Ivanfuhr\Ingestor\Schema\Schema;
 use Ivanfuhr\Ingestor\Stage\EmptyStage;
 
@@ -28,18 +29,15 @@ final class PreparableCustomerImport implements Definition, Preparable
         ]);
     }
 
-    /**
-     * @param array<string, mixed> $row
-     */
-    public function map(array $row, Context $context): Dataset
+    public function map(Row $row, Context $context): Dataset
     {
         /** @var array<string, int> $customers */
         $customers = $context->get('customers');
 
         return Dataset::make()->insert('customers', [
-            'document' => $row['document'],
-            'name' => $row['name'],
-            'customer_id' => $customers[$row['document']] ?? null,
+            'document' => $row->string('document'),
+            'name' => $row->string('name'),
+            'customer_id' => $customers[$row->string('document')] ?? null,
         ]);
     }
 }

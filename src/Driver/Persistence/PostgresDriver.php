@@ -17,6 +17,7 @@ use Ivanfuhr\Ingestor\Driver\Persistence\Postgres\PostgresStagingIngestor;
 use Ivanfuhr\Ingestor\Driver\Persistence\Postgres\PostgresTableIntrospection;
 use Ivanfuhr\Ingestor\Driver\Persistence\Postgres\StagingInsertBuffer;
 use Ivanfuhr\Ingestor\Metrics\MetricsRecorder;
+use Ivanfuhr\Ingestor\Row\Row;
 use Ivanfuhr\Ingestor\Stage\Stage;
 use PDO;
 use Throwable;
@@ -82,7 +83,7 @@ final readonly class PostgresDriver implements PersistenceDriver
         $failures = [];
 
         foreach ($rows as $rowContext) {
-            $dataset = $stage->definition->map($rowContext->data(), $stage->context);
+            $dataset = $stage->definition->map(Row::fromContext($rowContext), $stage->context);
 
             foreach ($dataset->mutations() as $mutation) {
                 $metrics->recordMutation($mutation->dataset);

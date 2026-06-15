@@ -22,7 +22,9 @@ use Ivanfuhr\Ingestor\Dataset\Dataset;
 use Ivanfuhr\Ingestor\Dataset\InsertMutation;
 use Ivanfuhr\Ingestor\ImportResult;
 use Ivanfuhr\Ingestor\Metrics\MetricsRecorder;
+use Ivanfuhr\Ingestor\Row\Row;
 use Ivanfuhr\Ingestor\Schema\DatasetConfig;
+use Ivanfuhr\Ingestor\Validation\FailureWithLine;
 use Ivanfuhr\Ingestor\Validation\Severity;
 use PHPUnit\Framework\Assert as PHPUnit;
 
@@ -140,8 +142,10 @@ final class DefinitionTest
         $this->lastResult = null;
 
         if ($this->definition instanceof ValidatesRows) {
-            foreach ($this->definition->validate($row, $context) as $failure) {
-                $this->lastFailures[] = $failure;
+            $rowObject = Row::make(1, $row);
+
+            foreach ($this->definition->validate($rowObject, $context) as $failure) {
+                $this->lastFailures[] = FailureWithLine::from($failure, $rowObject->line());
             }
 
             if ($this->hasValidationErrors()) {
@@ -149,7 +153,7 @@ final class DefinitionTest
             }
         }
 
-        $this->lastDataset = $this->definition->map($row, $context);
+        $this->lastDataset = $this->definition->map(Row::make(1, $row), $context);
 
         return $this;
     }
@@ -416,9 +420,10 @@ final class DefinitionTest
     ): Generator {
         foreach ($rows as $rowContext) {
             $hasError = false;
+            $row = Row::fromContext($rowContext);
 
-            foreach ($definition->validate($rowContext->data(), $context) as $failure) {
-                $failures[] = $failure;
+            foreach ($definition->validate($row, $context) as $failure) {
+                $failures[] = FailureWithLine::from($failure, $row->line());
 
                 if ($failure->severity() === Severity::ERROR) {
                     $hasError = true;

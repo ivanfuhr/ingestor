@@ -21,6 +21,7 @@ use Ivanfuhr\Ingestor\Metrics\DatasetMetricsSnapshot;
 use Ivanfuhr\Ingestor\Metrics\ImportMetrics;
 use Ivanfuhr\Ingestor\Metrics\MetricsRecorder;
 use Ivanfuhr\Ingestor\Persistence\Failure as PersistenceFailure;
+use Ivanfuhr\Ingestor\Row\Row;
 use Ivanfuhr\Ingestor\Schema\Schema;
 use Ivanfuhr\Ingestor\Stage\EmptyStage;
 use Ivanfuhr\Ingestor\Stage\Stage;
@@ -64,7 +65,7 @@ final class MetricsTest extends TestCase
             public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array
             {
                 foreach ($rows as $rowContext) {
-                    $dataset = $stage->definition->map($rowContext->data(), $stage->context);
+                    $dataset = $stage->definition->map(Row::fromContext($rowContext), $stage->context);
 
                     foreach ($dataset->mutations() as $mutation) {
                         $metrics->recordMutation($mutation->dataset);
@@ -161,7 +162,7 @@ final class MetricsTest extends TestCase
             public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array
             {
                 foreach ($rows as $rowContext) {
-                    $dataset = $stage->definition->map($rowContext->data(), $stage->context);
+                    $dataset = $stage->definition->map(Row::fromContext($rowContext), $stage->context);
 
                     foreach ($dataset->mutations() as $mutation) {
                         $metrics->recordMutation($mutation->dataset);
@@ -224,9 +225,9 @@ final class MetricsTest extends TestCase
                 self::$releasedMetrics = $import->metrics();
             }
 
-            public function map(array $row, Context $context): Dataset
+            public function map(Row $row, Context $context): Dataset
             {
-                return Dataset::make()->insert('customers', $row);
+                return Dataset::make()->insert('customers', $row->toArray());
             }
         };
 
@@ -327,7 +328,7 @@ final class MetricsTest extends TestCase
             public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array
             {
                 foreach ($rows as $rowContext) {
-                    $dataset = $stage->definition->map($rowContext->data(), $stage->context);
+                    $dataset = $stage->definition->map(Row::fromContext($rowContext), $stage->context);
 
                     foreach ($dataset->mutations() as $mutation) {
                         $metrics->recordMutation($mutation->dataset);

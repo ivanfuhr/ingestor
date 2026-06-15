@@ -45,7 +45,7 @@ $import->release();
 When creating or modifying a Definition:
 
 1. **`schema()`** — declare datasets, stage strategy, conflict strategy
-2. **`map(array $row, Context $context): Dataset`** — pure transformation; no I/O
+2. **`map(Row $row, Context $context): Dataset`** — pure transformation; no I/O
 3. Optional **`Preparable::prepare(Context)`** — preload caches, ID maps (I/O here)
 4. Optional **`ValidatesRows::validate()`** — yield `Failure::error()` or `Failure::warning()`
 
@@ -62,11 +62,11 @@ final class CustomerImport implements Definition
                 ->using(EmptyStage::class);
     }
 
-    public function map(array $row, Context $context): Dataset
+    public function map(Row $row, Context $context): Dataset
     {
         return Dataset::make()
-            ->insert('customers', ['document' => $row['cpf'], 'name' => $row['name']])
-            ->insert('addresses', ['document' => $row['cpf'], 'city' => $row['city']]);
+            ->insert('customers', ['document' => $row->string('cpf'), 'name' => $row->string('name')])
+            ->insert('addresses', ['document' => $row->string('cpf'), 'city' => $row->string('city')]);
     }
 }
 ```
@@ -145,6 +145,7 @@ In-memory drivers live in `src/Testing/` (`InMemoryPersistenceDriver`, `InMemory
 |------|----------|
 | `src/Contract/` | Interfaces (`Definition`, drivers, hooks, `Context`, `Failure`) |
 | `src/Dataset/` | `Dataset`, `InsertMutation` |
+| `src/Row/` | `Row` — fluent row accessor for `map()` and `validate()` |
 | `src/Schema/` | `Schema`, dataset builders |
 | `src/Stage/` | `EmptyStage`, `PrefilledStage` |
 | `src/Conflict/` | Conflict strategy value objects |
@@ -170,7 +171,7 @@ When implementing changes, preserve these invariants:
 1. **`map()` is pure** — side effects and queries belong in `prepare()`
 2. **Staging before production** — nothing reaches production until `release()`
 3. **One row → zero or many mutations** across datasets via `Dataset::make()->insert(...)`
-4. **Line numbers propagate** — source drivers yield `RowContext` for traceable failures
+4. **Line numbers propagate** — source drivers yield `RowContext`; definitions receive `Row` with `line()` and fluent accessors
 5. **Drivers are swappable** — new sources/persistence implement `SourceDriver` / `PersistenceDriver`
 
 ## Additional resources

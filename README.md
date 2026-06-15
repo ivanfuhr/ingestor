@@ -119,6 +119,7 @@ A **Definition** describes an import. It declares structure via `Schema` and tra
 use Ivanfuhr\Ingestor\Contract\Definition;
 use Ivanfuhr\Ingestor\Contract\Context;
 use Ivanfuhr\Ingestor\Dataset\Dataset;
+use Ivanfuhr\Ingestor\Row\Row;
 use Ivanfuhr\Ingestor\Schema\Schema;
 use Ivanfuhr\Ingestor\Stage\EmptyStage;
 use Ivanfuhr\Ingestor\Stage\PrefilledStage;
@@ -136,16 +137,16 @@ final class CustomerImport implements Definition
                 ->using(EmptyStage::class);
     }
 
-    public function map(array $row, Context $context): Dataset
+    public function map(Row $row, Context $context): Dataset
     {
         return Dataset::make()
             ->insert('customers', [
-                'document' => $row['cpf'],
-                'name' => $row['name'],
+                'document' => $row->string('cpf'),
+                'name' => $row->string('name'),
             ])
             ->insert('addresses', [
-                'document' => $row['cpf'],
-                'city' => $row['city'],
+                'document' => $row->string('cpf'),
+                'city' => $row->string('city'),
             ]);
     }
 }
@@ -196,13 +197,13 @@ final class OrderImport implements Definition, Preparable
         $context->put('customers', Customer::pluck('id', 'document')->all());
     }
 
-    public function map(array $row, Context $context): Dataset
+    public function map(Row $row, Context $context): Dataset
     {
         $customers = $context->get('customers');
 
         return Dataset::make()->insert('orders', [
-            'customer_id' => $customers[$row['document']] ?? null,
-            'total' => $row['total'],
+            'customer_id' => $customers[$row->string('document')] ?? null,
+            'total' => $row->float('total'),
         ]);
     }
 }
@@ -218,18 +219,19 @@ Row validation is optional and runs before mapping. Implement `ValidatesRows` on
 
 ```php
 use Ivanfuhr\Ingestor\Contract\ValidatesRows;
+use Ivanfuhr\Ingestor\Row\Row;
 use Ivanfuhr\Ingestor\Validation\Failure;
 
 final class CustomerImport implements Definition, ValidatesRows
 {
-    public function validate(array $row, Context $context): iterable
+    public function validate(Row $row, Context $context): iterable
     {
-        if (empty($row['document'])) {
+        if ($row->missing('document')) {
             yield Failure::error('document')
                 ->message('Document is required.');
         }
 
-        if (empty($row['phone'])) {
+        if ($row->missing('phone')) {
             yield Failure::warning('phone')
                 ->message('Phone number is empty.');
         }

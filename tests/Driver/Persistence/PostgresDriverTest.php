@@ -14,6 +14,7 @@ use Ivanfuhr\Ingestor\Driver\Persistence\PostgresDriver;
 use Ivanfuhr\Ingestor\Driver\Persistence\SqlFailureMode;
 use Ivanfuhr\Ingestor\Driver\Source\CsvDriver;
 use Ivanfuhr\Ingestor\Ingestor;
+use Ivanfuhr\Ingestor\Row\Row;
 use Ivanfuhr\Ingestor\Schema\Schema;
 use Ivanfuhr\Ingestor\Stage\EmptyStage;
 use Ivanfuhr\Ingestor\Stage\PrefilledStage;
@@ -54,11 +55,11 @@ final class PostgresDriverTest extends TestCase
                         ->onConflict(UpdateOnConflict::by('document'));
             }
 
-            public function map(array $row, Context $context): Dataset
+            public function map(Row $row, Context $context): Dataset
             {
                 return Dataset::make()->insert('customers', [
-                    'document' => $row['cpf'],
-                    'name' => $row['name'],
+                    'document' => $row->string('cpf'),
+                    'name' => $row->string('name'),
                 ]);
             }
         };
@@ -100,11 +101,11 @@ CSV);
                         ->onConflict(UpdateOnConflict::by('document'));
             }
 
-            public function map(array $row, Context $context): Dataset
+            public function map(Row $row, Context $context): Dataset
             {
                 return Dataset::make()->insert('customers', [
-                    'document' => $row['cpf'],
-                    'name' => $row['name'],
+                    'document' => $row->string('cpf'),
+                    'name' => $row->string('name'),
                 ]);
             }
         };
@@ -148,11 +149,11 @@ SQL);
                         ->onConflict(UpdateOnConflict::by('customer_id'));
             }
 
-            public function map(array $row, Context $context): Dataset
+            public function map(Row $row, Context $context): Dataset
             {
                 return Dataset::make()->insert('customer_records', [
-                    'customer_id' => $row['customer_id'],
-                    'customer_state' => $row['customer_state'],
+                    'customer_id' => $row->string('customer_id'),
+                    'customer_state' => $row->string('customer_state'),
                 ]);
             }
         };
@@ -198,12 +199,12 @@ SQL);
                         ->onConflict(UpdateOnConflict::by('cpf', 'rg'));
             }
 
-            public function map(array $row, Context $context): Dataset
+            public function map(Row $row, Context $context): Dataset
             {
                 return Dataset::make()->insert('customer_identities', [
-                    'cpf' => $row['cpf'],
-                    'rg' => $row['rg'],
-                    'name' => $row['name'],
+                    'cpf' => $row->string('cpf'),
+                    'rg' => $row->string('rg'),
+                    'name' => $row->string('name'),
                 ]);
             }
         };
@@ -240,11 +241,11 @@ SQL);
                         ->commit();
             }
 
-            public function map(array $row, Context $context): Dataset
+            public function map(Row $row, Context $context): Dataset
             {
                 return Dataset::make()->insert('customers', [
-                    'document' => $row['cpf'],
-                    'name' => $row['name'],
+                    'document' => $row->string('cpf'),
+                    'name' => $row->string('name'),
                 ]);
             }
         };
@@ -288,16 +289,16 @@ SQL);
                         ->commit();
             }
 
-            public function map(array $row, Context $context): Dataset
+            public function map(Row $row, Context $context): Dataset
             {
                 return Dataset::make()
                     ->insert('customers', [
-                        'document' => $row['cpf'],
-                        'name' => $row['name'],
+                        'document' => $row->string('cpf'),
+                        'name' => $row->string('name'),
                     ])
                     ->insert('addresses', [
-                        'document' => $row['cpf'],
-                        'city' => $row['city'],
+                        'document' => $row->string('cpf'),
+                        'city' => $row->string('city'),
                     ]);
             }
         };
@@ -337,11 +338,11 @@ SQL);
                         ->commit();
             }
 
-            public function map(array $row, Context $context): Dataset
+            public function map(Row $row, Context $context): Dataset
             {
                 return Dataset::make()->insert('customers', [
-                    'document' => $row['cpf'] === 'BAD' ? null : $row['cpf'],
-                    'name' => $row['name'],
+                    'document' => $row->string('cpf') === 'BAD' ? null : $row->string('cpf'),
+                    'name' => $row->string('name'),
                 ]);
             }
         };
@@ -395,11 +396,11 @@ CSV);
                         ->commit();
             }
 
-            public function map(array $row, Context $context): Dataset
+            public function map(Row $row, Context $context): Dataset
             {
                 return Dataset::make()->insert('customers', [
-                    'document' => $row['cpf'] === 'BAD' ? null : $row['cpf'],
-                    'name' => $row['name'],
+                    'document' => $row->string('cpf') === 'BAD' ? null : $row->string('cpf'),
+                    'name' => $row->string('name'),
                 ]);
             }
         };
@@ -454,11 +455,11 @@ CSV);
                         ->commit();
             }
 
-            public function map(array $row, Context $context): Dataset
+            public function map(Row $row, Context $context): Dataset
             {
                 return Dataset::make()->insert('customers', [
-                    'document' => $row['cpf'] === 'BAD' ? null : $row['cpf'],
-                    'name' => $row['name'],
+                    'document' => $row->string('cpf') === 'BAD' ? null : $row->string('cpf'),
+                    'name' => $row->string('name'),
                 ]);
             }
         };
@@ -503,11 +504,11 @@ CSV);
                         ->commit();
             }
 
-            public function map(array $row, Context $context): Dataset
+            public function map(Row $row, Context $context): Dataset
             {
                 return Dataset::make()->insert('customers', [
-                    'document' => $row['cpf'],
-                    'name' => $row['name'],
+                    'document' => $row->string('cpf'),
+                    'name' => $row->string('name'),
                 ]);
             }
         };
@@ -546,11 +547,11 @@ CSV);
                         ->onConflict(IgnoreOnConflict::by('document'));
             }
 
-            public function map(array $row, Context $context): Dataset
+            public function map(Row $row, Context $context): Dataset
             {
                 return Dataset::make()->insert('customers', [
-                    'document' => $row['cpf'],
-                    'name' => $row['name'],
+                    'document' => $row->string('cpf'),
+                    'name' => $row->string('name'),
                 ]);
             }
         };
@@ -601,11 +602,11 @@ SQL);
                         ->commit();
             }
 
-            public function map(array $row, Context $context): Dataset
+            public function map(Row $row, Context $context): Dataset
             {
                 return Dataset::make()->insert('customers', [
-                    'document' => $row['cpf'],
-                    'name' => $row['name'],
+                    'document' => $row->string('cpf'),
+                    'name' => $row->string('name'),
                 ]);
             }
         };

@@ -1,0 +1,129 @@
+# Ingestor Reference
+
+Quick lookup for agents working in this codebase. See [README.md](../../../README.md) for full documentation.
+
+## Import result API
+
+```php
+$import = $ingestor->for(MyImport::class)->from($source)->import();
+
+$import->hasFailures();
+$import->failures();   // iterable<Failure>
+$import->metrics();    // available after import, release or rollback
+
+$import->release();    // atomic promotion
+$import->rollback();   // discard stage
+```
+
+### Metrics
+
+```php
+$m = $import->metrics();
+$m->startedAt(); $m->finishedAt(); $m->duration();
+$m->rows(); $m->importedRows(); $m->failedRows(); $m->mutations();
+
+foreach ($m->datasets() as $ds) {
+    $ds->name(); $ds->mutations(); $ds->persisted(); $ds->failures();
+}
+```
+
+## Validation
+
+```php
+use Ivanfuhr\Ingestor\Contract\ValidatesRows;
+use Ivanfuhr\Ingestor\Validation\Failure;
+
+public function validate(array $row, Context $context): iterable
+{
+    if (empty($row['document'])) {
+        yield Failure::error('document')->message('Document is required.');
+    }
+    if (empty($row['phone'])) {
+        yield Failure::warning('phone')->message('Phone number is empty.');
+    }
+}
+```
+
+## Context / Preparable
+
+```php
+use Ivanfuhr\Ingestor\Contract\Preparable;
+
+public function prepare(Context $context): void
+{
+    $context->put('customers', Customer::pluck('id', 'document')->all());
+}
+
+public function map(array $row, Context $context): Dataset
+{
+    $customers = $context->get('customers');
+    // ...
+}
+```
+
+## BeforeRelease guard
+
+```php
+use Ivanfuhr\Ingestor\Exception\CannotRelease;
+
+public function beforeRelease(ImportedImport $import): void
+{
+    if ($import->hasFailures()) {
+        throw CannotRelease::because('Import contains unresolved failures.');
+    }
+}
+```
+
+## PostgresDriver
+
+```php
+new PostgresDriver(
+    pdo: $pdo,
+    chunkSize: 500,
+    failureMode: SqlFailureMode::Fast,      // or Diagnostic
+);
+```
+
+- Introspects production tables to build matching staging tables
+- Applies Schema conflict strategies via `ON CONFLICT`
+- Staging + atomic swap enables safe rollback window
+
+## Testing assertions
+
+| Method | Purpose |
+|--------|---------|
+| `assertDataset(name)` | Dataset declared in schema |
+| `assertStage(class)` | Stage strategy class |
+| `assertUpdateOnConflict(col)` | Conflict strategy |
+| `assertInserted(dataset, data)` | Insert mutation in map result |
+| `assertDatasetCount(name, n)` | Mutation count per dataset |
+| `assertFailure(field:, message:)` | Validation failure |
+| `assertFailureCount(n)` | Total failures |
+| `assertRows(n)` | Rows processed |
+| `assertImportedRows(n)` | Successful rows |
+| `assertFailedRows(n)` | Failed rows |
+| `assertMutations(n)` | Total mutations |
+
+## Key contracts
+
+| Interface | Method(s) |
+|-----------|-----------|
+| `Definition` | `schema()`, `map()` |
+| `Preparable` | `prepare(Context)` |
+| `ValidatesRows` | `validate()` → iterable failures |
+| `SourceDriver` | `read(mixed): iterable<RowContext>` |
+| `PersistenceDriver` | stage lifecycle, persist, release, rollback |
+| `BeforeImport` / `AfterImport` | import boundaries |
+| `BeforeRelease` / `AfterRelease` | release boundaries |
+
+## Failure inspection
+
+```php
+foreach ($import->failures() as $failure) {
+    $failure->line();     // source line
+    $failure->dataset();  // affected dataset
+    $failure->message();
+    $failure->data();     // row data
+    $failure->cause();    // underlying exception (persistence)
+}
+```

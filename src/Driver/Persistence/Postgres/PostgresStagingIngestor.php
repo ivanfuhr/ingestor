@@ -18,7 +18,7 @@ use PDOStatement;
 
 final class PostgresStagingIngestor
 {
-    private const int DIAGNOSTIC_LINEAR_SCAN_THRESHOLD = 1_000;
+    private const DIAGNOSTIC_LINEAR_SCAN_THRESHOLD = 1_000;
 
     /** @var array<string, string> */
     private array $conflictClauseCache = [];

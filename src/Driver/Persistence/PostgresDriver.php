@@ -23,7 +23,7 @@ use Throwable;
 
 final readonly class PostgresDriver implements PersistenceDriver
 {
-    private const int DEFAULT_CHUNK_SIZE = 500;
+    private const DEFAULT_CHUNK_SIZE = 500;
 
     private PostgresIdentifier $identifiers;
 

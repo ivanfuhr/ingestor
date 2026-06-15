@@ -11,6 +11,14 @@ use Ivanfuhr\Ingestor\Contract\SourceDriver;
 
 final class CsvDriver implements SourceDriver
 {
+    private readonly SourceEncoding $encoding;
+
+    public function __construct(
+        ?SourceEncoding $encoding = null,
+    ) {
+        $this->encoding = $encoding ?? SourceEncoding::utf8();
+    }
+
     public function read(mixed $source): iterable
     {
         if (!is_string($source)) {
@@ -21,11 +29,7 @@ final class CsvDriver implements SourceDriver
             throw new RuntimeException(sprintf('CSV file "%s" is not readable.', $source));
         }
 
-        $handle = fopen($source, 'rb');
-
-        if ($handle === false) {
-            throw new RuntimeException(sprintf('Unable to open CSV file "%s".', $source));
-        }
+        $handle = $this->openStream($source);
 
         try {
             $lineNumber = 1;
@@ -39,6 +43,8 @@ final class CsvDriver implements SourceDriver
                 return;
             }
 
+            $headers = $this->normalizeHeaders($headers);
+
             while (($values = fgetcsv($handle, length: 0, escape: '\\')) !== false) {
                 ++$lineNumber;
 
@@ -51,6 +57,51 @@ final class CsvDriver implements SourceDriver
         } finally {
             fclose($handle);
         }
+    }
+
+    /**
+     * @return resource
+     */
+    private function openStream(string $source)
+    {
+        $handle = fopen($source, 'rb');
+
+        if ($handle === false) {
+            throw new RuntimeException(sprintf('Unable to open CSV file "%s".', $source));
+        }
+
+        if ($this->encoding->isUtf8()) {
+            $this->encoding->consumeBomFromStream($handle);
+
+            return $handle;
+        }
+
+        $filter = sprintf('convert.iconv.%s/UTF-8', $this->encoding->name);
+        $added = stream_filter_append($handle, $filter, STREAM_FILTER_READ);
+
+        if ($added === false) {
+            fclose($handle);
+
+            throw new RuntimeException(sprintf('Unable to convert encoding "%s" to UTF-8.', $this->encoding->name));
+        }
+
+        return $handle;
+    }
+
+    /**
+     * @param list<string|null> $headers
+     *
+     * @return list<string|null>
+     */
+    private function normalizeHeaders(array $headers): array
+    {
+        if ($headers === [] || $headers[0] === null) {
+            return $headers;
+        }
+
+        $headers[0] = $this->encoding->stripBomFrom($headers[0]);
+
+        return $headers;
     }
 
     /**

@@ -34,6 +34,13 @@
         "phpstan": "phpstan analyse",
         "rector": "rector process",
         "rector:check": "rector process --dry-run",
-        "test": "phpunit"
+        "test:lint": "php-cs-fixer check",
+        "test:types": "phpstan analyse --ansi",
+        "test:unit": "phpunit --colors=always",
+        "test": [
+            "@test:lint",
+            "@test:types",
+            "@test:unit"
+        ]
     }
 }

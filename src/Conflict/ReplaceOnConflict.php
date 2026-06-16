@@ -11,12 +11,36 @@ final readonly class ReplaceOnConflict implements ConflictStrategy
      */
     private function __construct(
         private array $columns,
+        private DuplicateInBatch $duplicateInBatch,
     ) {
     }
 
-    public static function by(string ...$columns): self
+    public static function by(string|DuplicateInBatch ...$args): self
     {
-        return new self(ConflictColumns::from(...$columns));
+        $duplicateInBatch = DuplicateInBatch::LastWins;
+        $columnArgs = $args;
+
+        if ($columnArgs !== []) {
+            $last = $columnArgs[count($columnArgs) - 1];
+
+            if ($last instanceof DuplicateInBatch) {
+                $duplicateInBatch = $last;
+                $columnArgs = array_slice($columnArgs, 0, -1);
+            }
+        }
+
+        $columns = array_map(
+            static function (string|DuplicateInBatch $arg): string {
+                if (!$arg instanceof DuplicateInBatch) {
+                    return $arg;
+                }
+
+                throw new \InvalidArgumentException('DuplicateInBatch must be the last argument to by().');
+            },
+            $columnArgs,
+        );
+
+        return new self(ConflictColumns::from(...$columns), $duplicateInBatch);
     }
 
     public function columns(): array
@@ -27,5 +51,10 @@ final readonly class ReplaceOnConflict implements ConflictStrategy
     public function type(): ConflictType
     {
         return ConflictType::Replace;
+    }
+
+    public function duplicateInBatch(): DuplicateInBatch
+    {
+        return $this->duplicateInBatch;
     }
 }

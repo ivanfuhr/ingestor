@@ -35,6 +35,29 @@ final readonly class Failure implements FailureContract
         return new self($line, $dataset, $data, $cause->getMessage(), Severity::ERROR, $cause);
     }
 
+    /**
+     * @param array<string, mixed>|null $data
+     * @param non-empty-list<string> $conflictColumns
+     * @param non-empty-list<int> $lines
+     */
+    public static function duplicateConflictKeyInBatch(
+        int $line,
+        string $dataset,
+        ?array $data,
+        array $conflictColumns,
+        array $lines,
+    ): self {
+        sort($lines);
+
+        $message = sprintf(
+            'Duplicate conflict key (%s) in the same insert batch on lines %s',
+            implode(', ', $conflictColumns),
+            implode(', ', array_map(strval(...), $lines)),
+        );
+
+        return new self($line, $dataset, $data, $message, Severity::ERROR);
+    }
+
     public function line(): ?int
     {
         return $this->line;

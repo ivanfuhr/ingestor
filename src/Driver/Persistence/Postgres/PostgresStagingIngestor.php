@@ -35,6 +35,7 @@ final class PostgresStagingIngestor
         private readonly SqlFailureMode $failureMode,
         private readonly PostgresIdentifier $identifiers,
         private readonly PostgresTableIntrospection $introspection,
+        private readonly ConflictRowDeduplicator $conflictRowDeduplicator = new ConflictRowDeduplicator(),
     ) {
     }
 
@@ -103,9 +104,30 @@ final class PostgresStagingIngestor
      */
     private function insertBuffer(string $table, StagingInsertBuffer $buffer, MetricsRecorder $metrics): array
     {
+        $resolution = $this->conflictRowDeduplicator->resolve($buffer);
+
+        if ($resolution['failures'] !== []) {
+            $rowCount = count($buffer->rows);
+            $metrics->recordDatasetFailure($buffer->dataset, $rowCount);
+
+            for ($i = 0; $i < $rowCount; ++$i) {
+                $metrics->recordRowFailed();
+            }
+
+            return $resolution['failures'];
+        }
+
+        $resolvedBuffer = new StagingInsertBuffer(
+            dataset: $buffer->dataset,
+            conflict: $buffer->conflict,
+            columns: $buffer->columns,
+            rows: $resolution['rows'],
+            count: count($resolution['rows']),
+        );
+
         return match ($this->failureMode) {
-            SqlFailureMode::Fast => $this->insertRowsFast($table, $buffer, $metrics),
-            SqlFailureMode::Diagnostic => $this->insertRowsDiagnostic($table, $buffer, $metrics),
+            SqlFailureMode::Fast => $this->insertRowsFast($table, $resolvedBuffer, $metrics),
+            SqlFailureMode::Diagnostic => $this->insertRowsDiagnostic($table, $resolvedBuffer, $metrics),
         };
     }
 

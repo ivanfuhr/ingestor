@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Core import pipeline with `Ingestor`, `Definition`, `Schema`, `Dataset`, and `Stage`
+- `DuplicateInBatch` enum for handling duplicate conflict keys within the same insert batch (`LastWins`, `FirstWins`, `Fail`)
+- Deduplication in `PostgresDriver` for `UpdateOnConflict` and `ReplaceOnConflict` to prevent PostgreSQL cardinality violations
 - Source driver: `CsvDriver`
 - Source driver: `XlsxDriver` — zero Composer dependencies; streams sheet XML via `XMLReader` and `zip://`; worksheet selection via `XlsxSheet::byName()` / `byIndex()`
 - PHP extensions: `ext-xml` and `ext-zip` (required for XLSX)

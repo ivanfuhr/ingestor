@@ -82,6 +82,14 @@ final class CustomerImport implements Definition
 
 `UpdateOnConflict`, `IgnoreOnConflict`, `ReplaceOnConflict`, `FailOnConflict` — all via `::by('column')`. Applied by persistence driver (`ON CONFLICT` in Postgres).
 
+`UpdateOnConflict` and `ReplaceOnConflict` deduplicate rows with the same conflict key within each insert batch before `ON CONFLICT DO UPDATE`. Default: `DuplicateInBatch::LastWins`. Use `DuplicateInBatch::FirstWins` or `DuplicateInBatch::Fail` as the last argument to `::by()`:
+
+```php
+UpdateOnConflict::by('document', DuplicateInBatch::FirstWins);
+```
+
+This avoids PostgreSQL `cannot affect row a second time` when the source file contains duplicate keys in the same batch (unrelated to `PrefilledStage` itself).
+
 ## Validation & failures
 
 | Severity | Effect |

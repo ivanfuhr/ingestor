@@ -165,10 +165,19 @@ Declared in the Schema and translated by the persistence driver:
 
 ```php
 UpdateOnConflict::by('document');
+UpdateOnConflict::by('document', DuplicateInBatch::FirstWins);
 IgnoreOnConflict::by('document');
 ReplaceOnConflict::by('document');
 FailOnConflict::by('document');
 ```
+
+`UpdateOnConflict` and `ReplaceOnConflict` deduplicate rows that share the same conflict key within a single insert batch before executing `ON CONFLICT DO UPDATE`. By default, the **last row wins** (`DuplicateInBatch::LastWins`). This prevents PostgreSQL error `ON CONFLICT DO UPDATE command cannot affect row a second time`, which occurs when duplicate keys appear in the same multi-row `INSERT` — common with `PrefilledStage` incremental imports, but not caused by the stage strategy itself.
+
+| `DuplicateInBatch` | Behavior |
+|--------------------|----------|
+| `LastWins` (default) | Keep the last occurrence of each conflict key in the batch |
+| `FirstWins` | Keep the first occurrence |
+| `Fail` | Abort the batch and report failures for duplicate keys |
 
 A **Stage** is an isolated ingestion environment. Nothing touches production until `release()` is called.
 

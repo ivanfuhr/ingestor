@@ -112,6 +112,7 @@ new PostgresDriver(
 
 - Introspects production tables to build matching staging tables
 - Applies Schema conflict strategies via `ON CONFLICT`
+- Deduplicates duplicate conflict keys within each insert batch for `UpdateOnConflict` / `ReplaceOnConflict` (default `DuplicateInBatch::LastWins`)
 - Staging + atomic swap enables safe rollback window
 
 ## Testing assertions

@@ -6,6 +6,7 @@ namespace Ivanfuhr\Ingestor\Tests\Driver\Persistence;
 
 use PDOException;
 use Ivanfuhr\Ingestor\Conflict\UpdateOnConflict;
+use Ivanfuhr\Ingestor\Conflict\DuplicateInBatch;
 use Ivanfuhr\Ingestor\Conflict\IgnoreOnConflict;
 use Ivanfuhr\Ingestor\Contract\Context;
 use Ivanfuhr\Ingestor\Contract\Definition;
@@ -581,6 +582,203 @@ CSV);
             ['document' => '111', 'name' => 'First'],
             ['document' => '222', 'name' => 'Bob'],
         ], $rows);
+    }
+
+    #[Test]
+    public function it_updates_duplicate_rows_in_same_chunk_with_last_wins(): void
+    {
+        $definition = new class () implements Definition {
+            public function schema(): Schema|DatasetBuilder
+            {
+                return Schema::make()
+                    ->dataset('customers')
+                        ->using(EmptyStage::class)
+                        ->onConflict(UpdateOnConflict::by('document'));
+            }
+
+            public function map(Row $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('customers', [
+                    'document' => $row->string('cpf'),
+                    'name' => $row->string('name'),
+                ]);
+            }
+        };
+
+        $csv = $this->createCsv(<<<'CSV'
+cpf,name
+111,First
+111,Second
+222,Bob
+CSV);
+
+        $ingestor = Ingestor::make(new PostgresDriver($this->pdo), new CsvDriver());
+
+        $result = $ingestor
+            ->for($definition::class)
+            ->from($csv)
+            ->import();
+
+        $this->assertFalse($result->hasFailures());
+
+        $result->release();
+
+        $rows = $this->pdo->query('SELECT document, name FROM customers ORDER BY document')->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->assertSame([
+            ['document' => '111', 'name' => 'Second'],
+            ['document' => '222', 'name' => 'Bob'],
+        ], $rows);
+    }
+
+    #[Test]
+    public function it_keeps_first_duplicate_when_configured(): void
+    {
+        $definition = new class () implements Definition {
+            public function schema(): Schema|DatasetBuilder
+            {
+                return Schema::make()
+                    ->dataset('customers')
+                        ->using(EmptyStage::class)
+                        ->onConflict(UpdateOnConflict::by('document', DuplicateInBatch::FirstWins));
+            }
+
+            public function map(Row $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('customers', [
+                    'document' => $row->string('cpf'),
+                    'name' => $row->string('name'),
+                ]);
+            }
+        };
+
+        $csv = $this->createCsv(<<<'CSV'
+cpf,name
+111,First
+111,Second
+222,Bob
+CSV);
+
+        $ingestor = Ingestor::make(new PostgresDriver($this->pdo), new CsvDriver());
+
+        $result = $ingestor
+            ->for($definition::class)
+            ->from($csv)
+            ->import();
+
+        $this->assertFalse($result->hasFailures());
+
+        $result->release();
+
+        $rows = $this->pdo->query('SELECT document, name FROM customers ORDER BY document')->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->assertSame([
+            ['document' => '111', 'name' => 'First'],
+            ['document' => '222', 'name' => 'Bob'],
+        ], $rows);
+    }
+
+    #[Test]
+    public function it_fails_on_duplicate_conflict_keys_in_same_chunk(): void
+    {
+        $definition = new class () implements Definition {
+            public function schema(): Schema|DatasetBuilder
+            {
+                return Schema::make()
+                    ->dataset('customers')
+                        ->using(EmptyStage::class)
+                        ->onConflict(UpdateOnConflict::by('document', DuplicateInBatch::Fail));
+            }
+
+            public function map(Row $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('customers', [
+                    'document' => $row->string('cpf'),
+                    'name' => $row->string('name'),
+                ]);
+            }
+        };
+
+        $csv = $this->createCsv(<<<'CSV'
+cpf,name
+111,First
+111,Second
+222,Bob
+CSV);
+
+        $ingestor = Ingestor::make(new PostgresDriver($this->pdo), new CsvDriver());
+
+        $result = $ingestor
+            ->for($definition::class)
+            ->from($csv)
+            ->import();
+
+        $this->assertTrue($result->hasFailures());
+        $this->assertStringContainsString('Duplicate conflict key', $result->failures()[0]->message());
+
+        $rows = $this->pdo->query('SELECT document, name FROM customers ORDER BY document')->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->assertSame([], $rows);
+    }
+
+    #[Test]
+    public function it_deduplicates_composite_conflict_keys_in_same_chunk(): void
+    {
+        $this->pdo->exec('DROP TABLE IF EXISTS customer_identities CASCADE');
+        $this->pdo->exec(<<<'SQL'
+CREATE TABLE customer_identities (
+    cpf TEXT NOT NULL,
+    rg TEXT NOT NULL,
+    name TEXT NOT NULL,
+    PRIMARY KEY (cpf, rg)
+)
+SQL);
+
+        $definition = new class () implements Definition {
+            public function schema(): Schema|DatasetBuilder
+            {
+                return Schema::make()
+                    ->dataset('customer_identities')
+                        ->using(EmptyStage::class)
+                        ->onConflict(UpdateOnConflict::by('cpf', 'rg'));
+            }
+
+            public function map(Row $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('customer_identities', [
+                    'cpf' => $row->string('cpf'),
+                    'rg' => $row->string('rg'),
+                    'name' => $row->string('name'),
+                ]);
+            }
+        };
+
+        $csv = $this->createCsv(<<<'CSV'
+cpf,rg,name
+111,AA,First
+111,AA,Second
+111,BB,Other
+CSV);
+
+        $ingestor = Ingestor::make(new PostgresDriver($this->pdo), new CsvDriver());
+
+        $result = $ingestor
+            ->for($definition::class)
+            ->from($csv)
+            ->import();
+
+        $this->assertFalse($result->hasFailures());
+
+        $result->release();
+
+        $rows = $this->pdo->query('SELECT cpf, rg, name FROM customer_identities ORDER BY cpf, rg')->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->assertSame([
+            ['cpf' => '111', 'rg' => 'AA', 'name' => 'Second'],
+            ['cpf' => '111', 'rg' => 'BB', 'name' => 'Other'],
+        ], $rows);
+
+        $this->pdo->exec('DROP TABLE IF EXISTS customer_identities CASCADE');
     }
 
     #[Test]

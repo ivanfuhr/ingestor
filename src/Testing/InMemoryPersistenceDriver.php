@@ -9,6 +9,7 @@ use Ivanfuhr\Ingestor\Contract\Definition;
 use Ivanfuhr\Ingestor\Contract\PersistenceDriver;
 use Ivanfuhr\Ingestor\Metrics\MetricsRecorder;
 use Ivanfuhr\Ingestor\Row\Row;
+use Ivanfuhr\Ingestor\Schema\Schema;
 use Ivanfuhr\Ingestor\Stage\Stage;
 
 final class InMemoryPersistenceDriver implements PersistenceDriver
@@ -17,7 +18,7 @@ final class InMemoryPersistenceDriver implements PersistenceDriver
     {
         $stagingTables = [];
 
-        foreach (array_keys($definition->schema()->datasets()) as $dataset) {
+        foreach (array_keys(Schema::datasetsFromDefinition($definition)) as $dataset) {
             $stagingTables[$dataset] = 'test_' . $dataset;
         }
 

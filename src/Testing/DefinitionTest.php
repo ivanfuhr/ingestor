@@ -58,7 +58,7 @@ final class DefinitionTest
 
     public function assertDataset(string $name): self
     {
-        $datasets = $this->definition->schema()->datasets();
+        $datasets = Schema::datasetsFromDefinition($this->definition);
 
         Assert::true(
             array_key_exists($name, $datasets),
@@ -470,7 +470,7 @@ final class DefinitionTest
             PHPUnit::fail('assertDataset() must be called before inspecting dataset configuration.');
         }
 
-        $datasets = $this->definition->schema()->datasets();
+        $datasets = Schema::datasetsFromDefinition($this->definition);
 
         return $datasets[$dataset];
     }

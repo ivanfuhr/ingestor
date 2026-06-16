@@ -44,6 +44,13 @@ final class ArrayContext implements Context
                 return $args >= 3 ? $default : null;
             }
 
+            if (!is_string($lookupOrDefault) && !is_int($lookupOrDefault)) {
+                throw new InvalidArgumentException(sprintf(
+                    'Context lookup key must be a string or integer, %s given.',
+                    get_debug_type($lookupOrDefault),
+                ));
+            }
+
             if ($args >= 3) {
                 return $value[$lookupOrDefault] ?? $default;
             }

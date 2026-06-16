@@ -24,7 +24,7 @@ final readonly class PostgresStageBootstrap
     public function begin(Definition $definition, Context $context): Stage
     {
         $stageId = $this->identifiers->generateStageId();
-        $schema = $definition->schema();
+        $schema = Schema::resolve($definition->schema());
         $stagingTables = [];
 
         foreach ($schema->datasets() as $datasetName => $datasetConfig) {

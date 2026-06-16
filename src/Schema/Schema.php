@@ -18,18 +18,21 @@ final class Schema
         return new self();
     }
 
+    public static function resolve(Schema|DatasetBuilder $schema): self
+    {
+        if ($schema instanceof DatasetBuilder) {
+            return $schema->commit();
+        }
+
+        return $schema;
+    }
+
     /**
      * @return array<string, DatasetConfig>
      */
     public static function datasetsFromDefinition(Definition $definition): array
     {
-        $resolved = $definition->schema();
-
-        if ($resolved instanceof DatasetBuilder) {
-            $resolved = $resolved->commit();
-        }
-
-        return $resolved->datasets();
+        return self::resolve($definition->schema())->datasets();
     }
 
     public function dataset(string $name): DatasetBuilder

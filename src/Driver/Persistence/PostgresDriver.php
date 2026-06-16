@@ -18,6 +18,7 @@ use Ivanfuhr\Ingestor\Driver\Persistence\Postgres\PostgresTableIntrospection;
 use Ivanfuhr\Ingestor\Driver\Persistence\Postgres\StagingInsertBuffer;
 use Ivanfuhr\Ingestor\Metrics\MetricsRecorder;
 use Ivanfuhr\Ingestor\Row\Row;
+use Ivanfuhr\Ingestor\Schema\Schema;
 use Ivanfuhr\Ingestor\Stage\Stage;
 use PDO;
 use Throwable;
@@ -74,7 +75,7 @@ final readonly class PostgresDriver implements PersistenceDriver
      */
     public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array
     {
-        $schema = $stage->definition->schema();
+        $schema = Schema::resolve($stage->definition->schema());
 
         /** @var array<string, StagingInsertBuffer> $buffers */
         $buffers = [];
@@ -111,7 +112,7 @@ final readonly class PostgresDriver implements PersistenceDriver
 
     public function release(Stage $stage): void
     {
-        $schema = $stage->definition->schema();
+        $schema = Schema::resolve($stage->definition->schema());
 
         try {
             $this->pdo->beginTransaction();

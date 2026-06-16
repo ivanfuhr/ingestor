@@ -15,6 +15,7 @@ use Ivanfuhr\Ingestor\Driver\Persistence\SqlFailureMode;
 use Ivanfuhr\Ingestor\Driver\Source\CsvDriver;
 use Ivanfuhr\Ingestor\Ingestor;
 use Ivanfuhr\Ingestor\Row\Row;
+use Ivanfuhr\Ingestor\Schema\DatasetBuilder;
 use Ivanfuhr\Ingestor\Schema\Schema;
 use Ivanfuhr\Ingestor\Stage\EmptyStage;
 use Ivanfuhr\Ingestor\Stage\PrefilledStage;
@@ -47,7 +48,7 @@ final class PostgresDriverTest extends TestCase
     public function it_imports_csv_into_postgres_and_releases(): void
     {
         $definition = new class () implements Definition {
-            public function schema(): Schema
+            public function schema(): Schema|DatasetBuilder
             {
                 return Schema::make()
                     ->dataset('customers')
@@ -93,7 +94,7 @@ CSV);
         $this->pdo->exec("INSERT INTO customers (document, name) VALUES ('111', 'Old Name')");
 
         $definition = new class () implements Definition {
-            public function schema(): Schema
+            public function schema(): Schema|DatasetBuilder
             {
                 return Schema::make()
                     ->dataset('customers')
@@ -141,7 +142,7 @@ SQL);
         $existingId = (int) $this->pdo->query("SELECT id FROM customer_records WHERE customer_id = '06b8999e2fba1a1fbc88172c00ba8bc7'")->fetchColumn();
 
         $definition = new class () implements Definition {
-            public function schema(): Schema
+            public function schema(): Schema|DatasetBuilder
             {
                 return Schema::make()
                     ->dataset('customer_records')
@@ -191,7 +192,7 @@ SQL);
         $this->pdo->exec("INSERT INTO customer_identities (cpf, rg, name) VALUES ('111', 'AA', 'Old Name')");
 
         $definition = new class () implements Definition {
-            public function schema(): Schema
+            public function schema(): Schema|DatasetBuilder
             {
                 return Schema::make()
                     ->dataset('customer_identities')
@@ -233,7 +234,7 @@ SQL);
     public function it_inserts_rows_in_chunks(): void
     {
         $definition = new class () implements Definition {
-            public function schema(): Schema
+            public function schema(): Schema|DatasetBuilder
             {
                 return Schema::make()
                     ->dataset('customers')
@@ -278,7 +279,7 @@ SQL);
     public function it_chunks_inserts_across_multiple_datasets(): void
     {
         $definition = new class () implements Definition {
-            public function schema(): Schema
+            public function schema(): Schema|DatasetBuilder
             {
                 return Schema::make()
                     ->dataset('customers')
@@ -330,7 +331,7 @@ SQL);
     public function it_collects_persistence_failures_in_diagnostic_mode(): void
     {
         $definition = new class () implements Definition {
-            public function schema(): Schema
+            public function schema(): Schema|DatasetBuilder
             {
                 return Schema::make()
                     ->dataset('customers')
@@ -388,7 +389,7 @@ CSV);
     public function it_collects_persistence_failures_when_bad_row_falls_on_chunk_boundary(): void
     {
         $definition = new class () implements Definition {
-            public function schema(): Schema
+            public function schema(): Schema|DatasetBuilder
             {
                 return Schema::make()
                     ->dataset('customers')
@@ -447,7 +448,7 @@ CSV);
     public function it_collects_batch_failures_in_fast_mode(): void
     {
         $definition = new class () implements Definition {
-            public function schema(): Schema
+            public function schema(): Schema|DatasetBuilder
             {
                 return Schema::make()
                     ->dataset('customers')
@@ -496,7 +497,7 @@ CSV);
         $this->pdo->exec("INSERT INTO customers (document, name) VALUES ('999', 'Legacy'), ('111', 'Old Name')");
 
         $definition = new class () implements Definition {
-            public function schema(): Schema
+            public function schema(): Schema|DatasetBuilder
             {
                 return Schema::make()
                     ->dataset('customers')
@@ -539,7 +540,7 @@ CSV);
     public function it_applies_on_conflict_when_writing_to_staging(): void
     {
         $definition = new class () implements Definition {
-            public function schema(): Schema
+            public function schema(): Schema|DatasetBuilder
             {
                 return Schema::make()
                     ->dataset('customers')
@@ -594,7 +595,7 @@ SQL);
         $this->pdo->exec("INSERT INTO customer_notes (document) VALUES ('111')");
 
         $definition = new class () implements Definition {
-            public function schema(): Schema
+            public function schema(): Schema|DatasetBuilder
             {
                 return Schema::make()
                     ->dataset('customers')

@@ -23,9 +23,15 @@ $m->startedAt(); $m->finishedAt(); $m->duration();
 $m->rows(); $m->importedRows(); $m->failedRows(); $m->mutations();
 
 foreach ($m->datasets() as $ds) {
-    $ds->name(); $ds->mutations(); $ds->persisted(); $ds->failures();
+    $ds->name();
+    $ds->stageStrategy();     // FQCN, e.g. PrefilledStage::class
+    $ds->onConflict();        // ConflictType or null
+    $ds->onConflictColumns(); // e.g. ['document']
+    $ds->mutations(); $ds->persisted(); $ds->failures();
 }
 ```
+
+All datasets declared in the schema appear in metrics, even when they produced no mutations during the import.
 
 ## Validation
 

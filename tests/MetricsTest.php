@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Ivanfuhr\Ingestor\Tests;
 
 use DateTimeImmutable;
+use Ivanfuhr\Ingestor\Conflict\ConflictType;
 use Ivanfuhr\Ingestor\Context\ArrayRowContext;
 use Ivanfuhr\Ingestor\Contract\AfterRelease;
 use Ivanfuhr\Ingestor\Contract\Context;
@@ -22,9 +23,12 @@ use Ivanfuhr\Ingestor\Metrics\ImportMetrics;
 use Ivanfuhr\Ingestor\Metrics\MetricsRecorder;
 use Ivanfuhr\Ingestor\Persistence\Failure as PersistenceFailure;
 use Ivanfuhr\Ingestor\Row\Row;
+use Ivanfuhr\Ingestor\Schema\DatasetBuilder;
 use Ivanfuhr\Ingestor\Schema\Schema;
 use Ivanfuhr\Ingestor\Stage\EmptyStage;
+use Ivanfuhr\Ingestor\Stage\PrefilledStage;
 use Ivanfuhr\Ingestor\Stage\Stage;
+use Ivanfuhr\Ingestor\Tests\Fixtures\CustomerImport;
 use Ivanfuhr\Ingestor\Tests\Fixtures\SimpleCustomerImport;
 use Ivanfuhr\Ingestor\Tests\Fixtures\ValidatableCustomerImport;
 use PHPUnit\Framework\Attributes\Test;
@@ -106,6 +110,9 @@ final class MetricsTest extends TestCase
         $datasets = iterator_to_array($metrics->datasets());
         $this->assertCount(1, $datasets);
         $this->assertSame('customers', $datasets[0]->name());
+        $this->assertSame(EmptyStage::class, $datasets[0]->stageStrategy());
+        $this->assertNull($datasets[0]->onConflict());
+        $this->assertSame([], $datasets[0]->onConflictColumns());
         $this->assertSame(2, $datasets[0]->mutations());
         $this->assertSame(2, $datasets[0]->persisted());
         $this->assertSame(0, $datasets[0]->failures());
@@ -213,7 +220,7 @@ final class MetricsTest extends TestCase
         $definition = new class () implements Definition, AfterRelease {
             public static ?Metrics $releasedMetrics = null;
 
-            public function schema(): Schema
+            public function schema(): Schema|DatasetBuilder
             {
                 return Schema::make()
                     ->dataset('customers')
@@ -298,9 +305,9 @@ final class MetricsTest extends TestCase
             failedRows: 188,
             mutations: 842_195,
             datasets: [
-                new DatasetMetricsSnapshot('customers', 500_000, 499_812, 188),
-                new DatasetMetricsSnapshot('addresses', 500_000, 500_000, 0),
-                new DatasetMetricsSnapshot('phones', 342_195, 342_195, 0),
+                new DatasetMetricsSnapshot('customers', EmptyStage::class, null, [], 500_000, 499_812, 188),
+                new DatasetMetricsSnapshot('addresses', EmptyStage::class, null, [], 500_000, 500_000, 0),
+                new DatasetMetricsSnapshot('phones', EmptyStage::class, null, [], 342_195, 342_195, 0),
             ],
         );
 
@@ -312,6 +319,128 @@ final class MetricsTest extends TestCase
         $this->assertSame(188, $metrics->failedRows());
         $this->assertSame(842_195, $metrics->mutations());
         $this->assertCount(3, iterator_to_array($metrics->datasets()));
+    }
+
+    #[Test]
+    public function it_exposes_dataset_stage_and_on_conflict_metadata_from_schema(): void
+    {
+        $definition = new class () implements Definition {
+            public function schema(): Schema|DatasetBuilder
+            {
+                return Schema::make()
+                    ->dataset('customers')
+                        ->using(PrefilledStage::class)
+                        ->onConflict(\Ivanfuhr\Ingestor\Conflict\UpdateOnConflict::by('document'))
+                    ->dataset('addresses')
+                        ->using(EmptyStage::class);
+            }
+
+            public function map(Row $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('customers', [
+                    'document' => $row->string('cpf'),
+                    'name' => $row->string('name'),
+                ]);
+            }
+        };
+
+        $source = new class () implements SourceDriver {
+            public function read(mixed $source): iterable
+            {
+                yield new ArrayRowContext(1, ['cpf' => '1', 'name' => 'Ada']);
+            }
+        };
+
+        $persistence = $this->mappingPersistence();
+
+        $ingestor = Ingestor::make($persistence, $source);
+
+        $result = $ingestor
+            ->for($definition::class)
+            ->from('ignored')
+            ->import();
+
+        $datasets = iterator_to_array($result->metrics()->datasets(), preserve_keys: true);
+        $this->assertCount(2, $datasets);
+
+        $customers = $datasets[0];
+        $this->assertSame('customers', $customers->name());
+        $this->assertSame(PrefilledStage::class, $customers->stageStrategy());
+        $this->assertSame(ConflictType::Update, $customers->onConflict());
+        $this->assertSame(['document'], $customers->onConflictColumns());
+        $this->assertSame(1, $customers->mutations());
+
+        $addresses = $datasets[1];
+        $this->assertSame('addresses', $addresses->name());
+        $this->assertSame(EmptyStage::class, $addresses->stageStrategy());
+        $this->assertNull($addresses->onConflict());
+        $this->assertSame([], $addresses->onConflictColumns());
+        $this->assertSame(0, $addresses->mutations());
+    }
+
+    #[Test]
+    public function it_exposes_dataset_metadata_for_customer_import_fixture(): void
+    {
+        $source = new class () implements SourceDriver {
+            public function read(mixed $source): iterable
+            {
+                yield new ArrayRowContext(1, ['cpf' => '1', 'name' => 'Ada', 'city' => 'SP']);
+            }
+        };
+
+        $persistence = new class () implements PersistenceDriver {
+            public function begin(Definition $definition, Context $context): Stage
+            {
+                return new Stage('stage-1', $definition, [
+                    'customers' => 'stage_customers',
+                    'addresses' => 'stage_addresses',
+                ], $context);
+            }
+
+            public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array
+            {
+                foreach ($rows as $rowContext) {
+                    $dataset = $stage->definition->map(Row::fromContext($rowContext), $stage->context);
+
+                    foreach ($dataset->mutations() as $mutation) {
+                        $metrics->recordMutation($mutation->dataset);
+                        $metrics->recordPersisted($mutation->dataset);
+                    }
+                }
+
+                return [];
+            }
+
+            public function release(Stage $stage): void
+            {
+            }
+
+            public function rollback(Stage $stage): void
+            {
+            }
+        };
+
+        $ingestor = Ingestor::make($persistence, $source);
+
+        $result = $ingestor
+            ->for(CustomerImport::class)
+            ->from('ignored')
+            ->import();
+
+        $datasets = iterator_to_array($result->metrics()->datasets(), preserve_keys: true);
+        $this->assertCount(2, $datasets);
+
+        $customers = $datasets[0];
+        $this->assertSame('customers', $customers->name());
+        $this->assertSame(PrefilledStage::class, $customers->stageStrategy());
+        $this->assertSame(ConflictType::Update, $customers->onConflict());
+        $this->assertSame(['document'], $customers->onConflictColumns());
+
+        $addresses = $datasets[1];
+        $this->assertSame('addresses', $addresses->name());
+        $this->assertSame(EmptyStage::class, $addresses->stageStrategy());
+        $this->assertNull($addresses->onConflict());
+        $this->assertSame([], $addresses->onConflictColumns());
     }
 
     /**

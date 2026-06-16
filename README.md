@@ -350,7 +350,7 @@ public function beforeRelease(ImportedImport $import): void
 
 ### 📊 Metrics
 
-Read-only metrics collected during import. Available whether you release or rollback.
+Read-only metrics collected during import. Available whether you release or rollback. Every dataset declared in the schema is included in the per-dataset breakdown, even when it produced no mutations.
 
 ```php
 $metrics = $import->metrics();
@@ -366,15 +366,18 @@ $metrics->mutations();     // mutations produced
 
 foreach ($metrics->datasets() as $dataset) {
     $dataset->name();
+    $dataset->stageStrategy();     // e.g. PrefilledStage::class
+    $dataset->onConflict();        // ConflictType or null
+    $dataset->onConflictColumns(); // e.g. ['document']
     $dataset->mutations();
     $dataset->persisted();
     $dataset->failures();
 }
 ```
 
-Failures answer *what* and *why*. Metrics answer *how much* and *how long*.
+Failures answer *what* and *why*. Metrics answer *how much*, *how long*, and *how each dataset was configured*.
 
-**Why:** Every import becomes observable — performance, throughput, and per-dataset breakdowns without affecting the pipeline.
+**Why:** Every import becomes observable — performance, throughput, per-dataset breakdowns, and schema configuration (staging strategy and conflict handling) without affecting the pipeline.
 
 ---
 

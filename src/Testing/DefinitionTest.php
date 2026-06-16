@@ -24,6 +24,7 @@ use Ivanfuhr\Ingestor\ImportResult;
 use Ivanfuhr\Ingestor\Metrics\MetricsRecorder;
 use Ivanfuhr\Ingestor\Row\Row;
 use Ivanfuhr\Ingestor\Schema\DatasetConfig;
+use Ivanfuhr\Ingestor\Schema\Schema;
 use Ivanfuhr\Ingestor\Validation\FailureWithLine;
 use Ivanfuhr\Ingestor\Validation\Severity;
 use PHPUnit\Framework\Assert as PHPUnit;
@@ -279,6 +280,7 @@ final class DefinitionTest
         $context = $this->buildContext();
         $persistence = new InMemoryPersistenceDriver();
         $metrics = new MetricsRecorder();
+        $metrics->registerDatasets(Schema::datasetsFromDefinition($this->definition));
 
         /** @var list<Failure> $failures */
         $failures = [];

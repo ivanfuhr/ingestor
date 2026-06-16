@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Persistence failure diagnostics with `Fast` and `Diagnostic` SQL modes
 - Lifecycle hooks: `BeforeImport`, `AfterImport`, `BeforeRelease`, `AfterRelease`
 - Import metrics: duration, row counts, mutations, and per-dataset breakdown
+- Per-dataset metrics metadata: stage strategy (`EmptyStage`, `PrefilledStage`) and `onConflict` configuration (type and columns)
 - Testing utilities via `Ingestor::test()` with fluent assertions
 - Conflict strategies: `UpdateOnConflict`, `IgnoreOnConflict`, `ReplaceOnConflict`, `FailOnConflict`
 - Stage strategies: `EmptyStage`, `PrefilledStage`

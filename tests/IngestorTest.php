@@ -22,6 +22,7 @@ use Ivanfuhr\Ingestor\Exception\CannotRelease;
 use Ivanfuhr\Ingestor\Ingestor;
 use Ivanfuhr\Ingestor\Metrics\MetricsRecorder;
 use Ivanfuhr\Ingestor\Row\Row;
+use Ivanfuhr\Ingestor\Schema\DatasetBuilder;
 use Ivanfuhr\Ingestor\Schema\Schema;
 use Ivanfuhr\Ingestor\Stage\EmptyStage;
 use Ivanfuhr\Ingestor\Stage\Stage;
@@ -93,7 +94,7 @@ final class IngestorTest extends TestCase
     public function it_calls_prepare_before_ingesting_rows(): void
     {
         $definition = new class () implements Definition, Preparable {
-            public function schema(): Schema
+            public function schema(): Schema|DatasetBuilder
             {
                 return Schema::make()
                     ->dataset('customers')
@@ -297,7 +298,7 @@ final class IngestorTest extends TestCase
         $definition = new class () implements Definition, Preparable, ValidatesRows {
             public static bool $validatedWithPreparedContext = false;
 
-            public function schema(): Schema
+            public function schema(): Schema|DatasetBuilder
             {
                 return Schema::make()
                     ->dataset('customers')
@@ -431,7 +432,7 @@ final class IngestorTest extends TestCase
             /** @var list<string> */
             public static array $events = [];
 
-            public function schema(): Schema
+            public function schema(): Schema|DatasetBuilder
             {
                 return Schema::make()
                     ->dataset('customers')
@@ -486,7 +487,7 @@ final class IngestorTest extends TestCase
 
             public static ?ImportedImport $import = null;
 
-            public function schema(): Schema
+            public function schema(): Schema|DatasetBuilder
             {
                 return Schema::make()
                     ->dataset('customers')
@@ -538,7 +539,7 @@ final class IngestorTest extends TestCase
 
             public static ?ReleasedImport $afterReleaseImport = null;
 
-            public function schema(): Schema
+            public function schema(): Schema|DatasetBuilder
             {
                 return Schema::make()
                     ->dataset('customers')
@@ -614,7 +615,7 @@ final class IngestorTest extends TestCase
     public function it_prevents_release_when_before_release_throws(): void
     {
         $definition = new class () implements Definition, BeforeRelease {
-            public function schema(): Schema
+            public function schema(): Schema|DatasetBuilder
             {
                 return Schema::make()
                     ->dataset('customers')

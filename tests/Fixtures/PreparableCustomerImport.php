@@ -9,12 +9,13 @@ use Ivanfuhr\Ingestor\Contract\Definition;
 use Ivanfuhr\Ingestor\Contract\Preparable;
 use Ivanfuhr\Ingestor\Dataset\Dataset;
 use Ivanfuhr\Ingestor\Row\Row;
+use Ivanfuhr\Ingestor\Schema\DatasetBuilder;
 use Ivanfuhr\Ingestor\Schema\Schema;
 use Ivanfuhr\Ingestor\Stage\EmptyStage;
 
 final class PreparableCustomerImport implements Definition, Preparable
 {
-    public function schema(): Schema
+    public function schema(): Schema|DatasetBuilder
     {
         return Schema::make()
             ->dataset('customers')

@@ -22,6 +22,7 @@ use Ivanfuhr\Ingestor\Contract\SourceDriver;
 use Ivanfuhr\Ingestor\Contract\ValidatesRows;
 use Ivanfuhr\Ingestor\Metrics\MetricsRecorder;
 use Ivanfuhr\Ingestor\Row\Row;
+use Ivanfuhr\Ingestor\Schema\Schema;
 use Ivanfuhr\Ingestor\Testing\DefinitionTest;
 use Ivanfuhr\Ingestor\Validation\FailureWithLine;
 use Ivanfuhr\Ingestor\Validation\Severity;
@@ -107,6 +108,7 @@ final class Ingestor implements IngestorContract
         $failures = [];
 
         $metrics = new MetricsRecorder();
+        $metrics->registerDatasets(Schema::datasetsFromDefinition($this->definition));
 
         try {
             $rows = $this->countedRows($this->source->read($this->importSource), $metrics);

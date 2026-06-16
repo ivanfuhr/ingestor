@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Ivanfuhr\Ingestor\Schema;
 
+use Ivanfuhr\Ingestor\Contract\Definition;
+
 final class Schema
 {
     /** @var array<string, DatasetConfig> */
@@ -14,6 +16,20 @@ final class Schema
     public static function make(): self
     {
         return new self();
+    }
+
+    /**
+     * @return array<string, DatasetConfig>
+     */
+    public static function datasetsFromDefinition(Definition $definition): array
+    {
+        $resolved = $definition->schema();
+
+        if ($resolved instanceof DatasetBuilder) {
+            $resolved = $resolved->commit();
+        }
+
+        return $resolved->datasets();
     }
 
     public function dataset(string $name): DatasetBuilder

@@ -10,13 +10,14 @@ use Ivanfuhr\Ingestor\Contract\Definition;
 use Ivanfuhr\Ingestor\Contract\ValidatesRows;
 use Ivanfuhr\Ingestor\Dataset\Dataset;
 use Ivanfuhr\Ingestor\Row\Row;
+use Ivanfuhr\Ingestor\Schema\DatasetBuilder;
 use Ivanfuhr\Ingestor\Schema\Schema;
 use Ivanfuhr\Ingestor\Stage\PrefilledStage;
 use Ivanfuhr\Ingestor\Validation\Failure;
 
 final class PrdCustomerImport implements Definition, ValidatesRows
 {
-    public function schema(): Schema
+    public function schema(): Schema|DatasetBuilder
     {
         return Schema::make()
             ->dataset('customers')

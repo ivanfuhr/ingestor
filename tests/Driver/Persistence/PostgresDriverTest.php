@@ -46,6 +46,55 @@ final class PostgresDriverTest extends TestCase
     }
 
     #[Test]
+    public function it_persists_boolean_false_values(): void
+    {
+        $this->pdo->exec('ALTER TABLE customers ADD COLUMN active BOOLEAN NOT NULL DEFAULT true');
+
+        $definition = new class () implements Definition {
+            public function schema(): Schema|DatasetBuilder
+            {
+                return Schema::make()
+                    ->dataset('customers')
+                        ->using(EmptyStage::class)
+                        ->commit();
+            }
+
+            public function map(Row $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('customers', [
+                    'document' => $row->string('cpf'),
+                    'name' => $row->string('name'),
+                    'active' => $row->string('active') === '1',
+                ]);
+            }
+        };
+
+        $csv = $this->createCsv(<<<'CSV'
+cpf,name,active
+111,Ada,1
+222,Bob,0
+CSV);
+
+        $ingestor = Ingestor::make(new PostgresDriver($this->pdo), new CsvDriver());
+
+        $result = $ingestor
+            ->for($definition::class)
+            ->from($csv)
+            ->import();
+
+        $this->assertFalse($result->hasFailures());
+
+        $result->release();
+
+        $rows = $this->pdo->query('SELECT document, active FROM customers ORDER BY document')->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->assertSame([
+            ['document' => '111', 'active' => true],
+            ['document' => '222', 'active' => false],
+        ], $rows);
+    }
+
+    #[Test]
     public function it_imports_csv_into_postgres_and_releases(): void
     {
         $definition = new class () implements Definition {

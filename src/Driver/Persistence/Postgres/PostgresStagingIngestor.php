@@ -318,7 +318,24 @@ final class PostgresStagingIngestor
         }
 
         $pdoStatement = $this->prepareChunkedStatement($table, $columns, $length, $conflictStrategy);
-        $pdoStatement->execute($values);
+        $pdoStatement->execute($this->normalizeBindValues($values));
+    }
+
+    /**
+     * PDO treats execute() parameters as strings, so false becomes "" which PostgreSQL rejects.
+     *
+     * @param list<mixed> $values
+     *
+     * @return list<mixed>
+     */
+    private function normalizeBindValues(array $values): array
+    {
+        return array_map(
+            static fn (mixed $value): mixed => is_bool($value)
+                ? ($value ? 'true' : 'false')
+                : $value,
+            $values,
+        );
     }
 
     /**

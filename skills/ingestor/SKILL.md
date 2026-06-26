@@ -92,10 +92,10 @@ This avoids PostgreSQL `cannot affect row a second time` when the source file co
 
 ## Validation & failures
 
-| Severity | Effect |
-|----------|--------|
-| `ERROR` | Row skipped — not mapped or persisted |
-| `WARNING` | Recorded; row continues |
+| Severity | Default | Override |
+|----------|---------|----------|
+| `ERROR` | Row skipped — not mapped or persisted | `->continueRow()` |
+| `WARNING` | Recorded; row continues | `->skipRow()` |
 
 Persistence errors (NOT NULL, FK, UNIQUE) surface as the same `Failure` type with `line()`, `dataset()`, `data()`, `cause()`.
 

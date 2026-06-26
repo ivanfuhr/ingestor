@@ -8,6 +8,8 @@ final class FailureBuilder
 {
     private ?int $line = null;
 
+    private ?bool $skipRow = null;
+
     public function __construct(
         private readonly ?string $field,
         private readonly Severity $severity,
@@ -21,8 +23,22 @@ final class FailureBuilder
         return $this;
     }
 
+    public function skipRow(): self
+    {
+        $this->skipRow = true;
+
+        return $this;
+    }
+
+    public function continueRow(): self
+    {
+        $this->skipRow = false;
+
+        return $this;
+    }
+
     public function message(string $message): Failure
     {
-        return new Failure($this->field, $message, $this->severity, $this->line);
+        return new Failure($this->field, $message, $this->severity, $this->line, $this->skipRow);
     }
 }

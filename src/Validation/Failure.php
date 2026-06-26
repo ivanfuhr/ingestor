@@ -13,6 +13,7 @@ final class Failure implements FailureContract
         private readonly string $message,
         private readonly Severity $severity,
         private readonly ?int $line = null,
+        private readonly ?bool $skipRow = null,
     ) {
     }
 
@@ -57,6 +58,11 @@ final class Failure implements FailureContract
     public function severity(): Severity
     {
         return $this->severity;
+    }
+
+    public function shouldSkipRow(): bool
+    {
+        return $this->skipRow ?? $this->severity->skipsRowByDefault();
     }
 
     public function cause(): ?\Throwable

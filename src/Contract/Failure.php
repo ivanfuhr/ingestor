@@ -24,5 +24,7 @@ interface Failure
 
     public function severity(): Severity;
 
+    public function shouldSkipRow(): bool;
+
     public function cause(): ?Throwable;
 }

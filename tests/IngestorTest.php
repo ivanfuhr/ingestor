@@ -293,6 +293,90 @@ final class IngestorTest extends TestCase
     }
 
     #[Test]
+    public function it_respects_skip_row_overrides_during_validation(): void
+    {
+        $definition = new class () implements Definition, ValidatesRows {
+            public function schema(): Schema|DatasetBuilder
+            {
+                return Schema::make()
+                    ->dataset('customers')
+                        ->using(EmptyStage::class);
+            }
+
+            public function validate(Row $row, Context $context): iterable
+            {
+                if ($row->missing('document')) {
+                    yield \Ivanfuhr\Ingestor\Validation\Failure::error('document')
+                        ->continueRow()
+                        ->message('Document is missing but row should continue.');
+                }
+
+                if ($row->missing('phone')) {
+                    yield \Ivanfuhr\Ingestor\Validation\Failure::warning('phone')
+                        ->skipRow()
+                        ->message('Phone is required for this import.');
+                }
+            }
+
+            public function map(Row $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('customers', $row->toArray());
+            }
+        };
+
+        $source = new class () implements SourceDriver {
+            public function read(mixed $source): iterable
+            {
+                yield new ArrayRowContext(1, ['document' => '', 'name' => 'No document', 'phone' => '123']);
+                yield new ArrayRowContext(2, ['document' => '111', 'name' => 'No phone', 'phone' => '']);
+            }
+        };
+
+        $persistence = new class () implements PersistenceDriver {
+            /** @var list<array<string, mixed>> */
+            public array $mappedRows = [];
+
+            public function begin(Definition $definition, Context $context): Stage
+            {
+                return new Stage('stage-1', $definition, ['customers' => 'stage_customers'], $context);
+            }
+
+            public function ingest(Stage $stage, iterable $rows, MetricsRecorder $metrics): array
+            {
+                foreach ($rows as $rowContext) {
+                    $dataset = $stage->definition->map(Row::fromContext($rowContext), $stage->context);
+
+                    foreach ($dataset->mutations() as $mutation) {
+                        $this->mappedRows[] = $mutation->data;
+                    }
+                }
+
+                return [];
+            }
+
+            public function release(Stage $stage): void
+            {
+            }
+
+            public function rollback(Stage $stage): void
+            {
+            }
+        };
+
+        $result = Ingestor::make($persistence, $source)
+            ->for($definition::class)
+            ->from('ignored')
+            ->import();
+
+        $this->assertSame([
+            ['document' => '', 'name' => 'No document', 'phone' => '123'],
+        ], $persistence->mappedRows);
+        $this->assertCount(2, $result->failures());
+        $this->assertFalse($result->failures()[0]->shouldSkipRow());
+        $this->assertTrue($result->failures()[1]->shouldSkipRow());
+    }
+
+    #[Test]
     public function it_validates_rows_after_prepare(): void
     {
         $definition = new class () implements Definition, Preparable, ValidatesRows {

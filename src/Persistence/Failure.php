@@ -88,6 +88,11 @@ final readonly class Failure implements FailureContract
         return $this->severity;
     }
 
+    public function shouldSkipRow(): bool
+    {
+        return true;
+    }
+
     public function cause(): ?Throwable
     {
         return $this->cause;

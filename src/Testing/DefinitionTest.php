@@ -26,7 +26,6 @@ use Ivanfuhr\Ingestor\Row\Row;
 use Ivanfuhr\Ingestor\Schema\DatasetConfig;
 use Ivanfuhr\Ingestor\Schema\Schema;
 use Ivanfuhr\Ingestor\Validation\FailureWithLine;
-use Ivanfuhr\Ingestor\Validation\Severity;
 use PHPUnit\Framework\Assert as PHPUnit;
 
 final class DefinitionTest
@@ -149,7 +148,7 @@ final class DefinitionTest
                 $this->lastFailures[] = FailureWithLine::from($failure, $rowObject->line());
             }
 
-            if ($this->hasValidationErrors()) {
+            if ($this->shouldSkipValidatedRow()) {
                 return $this;
             }
         }
@@ -427,7 +426,7 @@ final class DefinitionTest
             foreach ($definition->validate($row, $context) as $failure) {
                 $failures[] = FailureWithLine::from($failure, $row->line());
 
-                if ($failure->severity() === Severity::ERROR) {
+                if ($failure->shouldSkipRow()) {
                     $hasError = true;
                 }
             }
@@ -475,10 +474,10 @@ final class DefinitionTest
         return $datasets[$dataset];
     }
 
-    private function hasValidationErrors(): bool
+    private function shouldSkipValidatedRow(): bool
     {
         foreach ($this->lastFailures as $failure) {
-            if ($failure->severity() === Severity::ERROR) {
+            if ($failure->shouldSkipRow()) {
                 return true;
             }
         }

@@ -150,6 +150,7 @@ foreach ($import->failures() as $failure) {
     $failure->line();     // source line
     $failure->dataset();  // affected dataset
     $failure->message();
+    $failure->shouldSkipRow(); // default from severity; overridable via skipRow()/continueRow()
     $failure->data();     // row data
     $failure->cause();    // underlying exception (persistence)
 }

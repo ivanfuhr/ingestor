@@ -57,6 +57,11 @@ final readonly class FailureWithLine implements FailureContract
         return $this->failure->severity();
     }
 
+    public function shouldSkipRow(): bool
+    {
+        return $this->failure->shouldSkipRow();
+    }
+
     public function cause(): ?Throwable
     {
         return $this->failure->cause();

@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Persistence driver: `PostgresDriver` with staging, batch inserts, and atomic release
 - Context and `Preparable` for preloading reference data
 - Row validation via `ValidatesRows` with `ERROR` and `WARNING` severities
+- Per-failure row skipping overrides via `Failure::skipRow()` and `Failure::continueRow()`
 - Persistence failure diagnostics with `Fast` and `Diagnostic` SQL modes
 - Lifecycle hooks: `BeforeImport`, `AfterImport`, `BeforeRelease`, `AfterRelease`
 - Import metrics: duration, row counts, mutations, and per-dataset breakdown

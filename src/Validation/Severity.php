@@ -9,4 +9,9 @@ enum Severity
     case ERROR;
 
     case WARNING;
+
+    public function skipsRowByDefault(): bool
+    {
+        return $this === self::ERROR;
+    }
 }

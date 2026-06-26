@@ -246,10 +246,20 @@ final class CustomerImport implements Definition, ValidatesRows
 }
 ```
 
-| Severity | Behavior |
-|----------|----------|
-| `ERROR` | Row is skipped — not mapped or persisted |
-| `WARNING` | Recorded, but the row continues through the pipeline |
+| Severity | Default behavior | Override |
+|----------|------------------|----------|
+| `ERROR` | Row is skipped — not mapped or persisted | `->continueRow()` keeps the row in the pipeline |
+| `WARNING` | Recorded, but the row continues through the pipeline | `->skipRow()` drops the row |
+
+```php
+yield Failure::warning('phone')
+    ->skipRow()
+    ->message('Phone is required for this import.');
+
+yield Failure::error('legacy_code')
+    ->continueRow()
+    ->message('Legacy code is invalid but row can still be imported.');
+```
 
 Failures are available after import:
 

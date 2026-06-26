@@ -25,7 +25,6 @@ use Ivanfuhr\Ingestor\Row\Row;
 use Ivanfuhr\Ingestor\Schema\Schema;
 use Ivanfuhr\Ingestor\Testing\DefinitionTest;
 use Ivanfuhr\Ingestor\Validation\FailureWithLine;
-use Ivanfuhr\Ingestor\Validation\Severity;
 
 final class Ingestor implements IngestorContract
 {
@@ -172,7 +171,7 @@ final class Ingestor implements IngestorContract
             foreach ($definition->validate($row, $context) as $failure) {
                 $failures[] = FailureWithLine::from($failure, $row->line());
 
-                if ($failure->severity() === Severity::ERROR) {
+                if ($failure->shouldSkipRow()) {
                     $hasError = true;
                 }
             }

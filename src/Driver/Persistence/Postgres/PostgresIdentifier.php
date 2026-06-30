@@ -11,6 +11,13 @@ final class PostgresIdentifier
         return '"' . str_replace('"', '""', $identifier) . '"';
     }
 
+    public function quoteQualified(string $qualifiedName): string
+    {
+        $parts = explode('.', str_replace('"', '', $qualifiedName));
+
+        return implode('.', array_map($this->quote(...), $parts));
+    }
+
     public function stagingTableName(string $stageId, string $dataset): string
     {
         return sprintf('ingestor_stage_%s_%s', $stageId, $dataset);

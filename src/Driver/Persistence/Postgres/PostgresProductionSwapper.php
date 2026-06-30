@@ -43,6 +43,13 @@ final readonly class PostgresProductionSwapper
             return;
         }
 
+        if ($this->tryClearTableWithForeignKeyTriggersDisabled($productionTable, $quotedProduction)) {
+            $this->copyStagingRows($productionTable, $quotedProduction, $quotedStaging);
+            $this->introspection->synchronizeSequences($productionTable);
+
+            return;
+        }
+
         if ($this->tryClearTable($quotedProduction, replicaRole: false)) {
             $this->copyStagingRows($productionTable, $quotedProduction, $quotedStaging);
             $this->introspection->synchronizeSequences($productionTable);
@@ -51,7 +58,8 @@ final readonly class PostgresProductionSwapper
         }
 
         throw new PDOException(sprintf(
-            'Unable to replace contents of table "%s". The table may be referenced by foreign keys from other tables.',
+            'Unable to replace contents of table "%s". The table may be referenced by foreign keys from other tables, '
+            . 'or the database role may lack permission to bypass them (requires table ownership or superuser).',
             $productionTable,
         ));
     }
@@ -88,6 +96,61 @@ final readonly class PostgresProductionSwapper
                 }
             }
         });
+    }
+
+    private function tryClearTableWithForeignKeyTriggersDisabled(string $productionTable, string $quotedProduction): bool
+    {
+        $referencingTables = $this->introspection->referencingTables($productionTable);
+
+        if ($referencingTables === [] && !$this->tableHasSelfReferencingForeignKey($productionTable)) {
+            return false;
+        }
+
+        /** @var list<string> $tablesToDisable */
+        $tablesToDisable = array_values(array_unique([$productionTable, ...$referencingTables]));
+
+        return $this->attempt(function () use ($quotedProduction, $tablesToDisable): void {
+            foreach ($tablesToDisable as $table) {
+                $quoted = $this->identifiers->quoteQualified($table);
+                $this->pdo->exec(sprintf('LOCK TABLE %s IN ACCESS EXCLUSIVE MODE', $quoted));
+                $this->pdo->exec(sprintf('ALTER TABLE %s DISABLE TRIGGER ALL', $quoted));
+            }
+
+            try {
+                $this->pdo->exec(sprintf('DELETE FROM %s', $quotedProduction));
+            } finally {
+                foreach ($tablesToDisable as $table) {
+                    $quoted = $this->identifiers->quoteQualified($table);
+                    $this->pdo->exec(sprintf('ALTER TABLE %s ENABLE TRIGGER ALL', $quoted));
+                }
+            }
+        });
+    }
+
+    private function tableHasSelfReferencingForeignKey(string $productionTable): bool
+    {
+        $tableName = $this->identifiers->basename($productionTable);
+
+        $statement = $this->pdo->query(sprintf(
+            <<<'SQL'
+            SELECT 1
+            FROM pg_constraint AS constraint
+            INNER JOIN pg_class AS referenced ON referenced.oid = constraint.confrelid
+            INNER JOIN pg_namespace AS referenced_ns ON referenced_ns.oid = referenced.relnamespace
+            WHERE constraint.contype = 'f'
+              AND constraint.conrelid = constraint.confrelid
+              AND referenced_ns.nspname = 'public'
+              AND referenced.relname = %s
+            LIMIT 1
+            SQL,
+            $this->pdo->quote($tableName),
+        ));
+
+        if ($statement === false) {
+            return false;
+        }
+
+        return $statement->fetchColumn() !== false;
     }
 
     /**

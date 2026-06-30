@@ -1047,6 +1047,70 @@ SQL);
         ], $rows);
     }
 
+    #[Test]
+    public function it_replaces_production_when_referenced_by_foreign_keys_without_superuser(): void
+    {
+        $this->pdo->exec(<<<'SQL'
+CREATE ROLE ingestor_limited LOGIN PASSWORD 'ingestor_limited'
+SQL);
+        $this->pdo->exec('GRANT ALL ON SCHEMA public TO ingestor_limited');
+        $this->pdo->exec('GRANT ALL ON ALL TABLES IN SCHEMA public TO ingestor_limited');
+        $this->pdo->exec('ALTER TABLE customers OWNER TO ingestor_limited');
+
+        $this->pdo->exec(<<<'SQL'
+CREATE TABLE customer_notes (
+    document TEXT NOT NULL REFERENCES customers (document)
+)
+SQL);
+        $this->pdo->exec('ALTER TABLE customer_notes OWNER TO ingestor_limited');
+        $this->pdo->exec("INSERT INTO customers (document, name) VALUES ('111', 'Legacy')");
+        $this->pdo->exec("INSERT INTO customer_notes (document) VALUES ('111')");
+
+        $limitedPdo = new PDO(
+            getenv('INGESTOR_TEST_DSN') ?: 'pgsql:host=127.0.0.1;port=5432;dbname=ingestor_test',
+            'ingestor_limited',
+            'ingestor_limited',
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION],
+        );
+
+        $definition = new class () implements Definition {
+            public function schema(): Schema|DatasetBuilder
+            {
+                return Schema::make()
+                    ->dataset('customers')
+                        ->using(EmptyStage::class)
+                        ->commit();
+            }
+
+            public function map(Row $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('customers', [
+                    'document' => $row->string('cpf'),
+                    'name' => $row->string('name'),
+                ]);
+            }
+        };
+
+        $csv = $this->createCsv("cpf,name\n222,New Customer\n");
+
+        $ingestor = Ingestor::make(new PostgresDriver($limitedPdo), new CsvDriver());
+
+        $ingestor
+            ->for($definition::class)
+            ->from($csv)
+            ->import()
+            ->release();
+
+        $rows = $limitedPdo->query('SELECT document, name FROM customers ORDER BY document')->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->assertSame([
+            ['document' => '222', 'name' => 'New Customer'],
+        ], $rows);
+
+        $this->pdo->exec('DROP OWNED BY ingestor_limited CASCADE');
+        $this->pdo->exec('DROP ROLE ingestor_limited');
+    }
+
     private function resetDatabase(): void
     {
         $this->pdo->exec('DROP TABLE IF EXISTS customer_notes CASCADE');

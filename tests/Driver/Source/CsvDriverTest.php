@@ -131,7 +131,7 @@ cpf,name
 222,Bob
 CSV);
 
-        $rows = iterator_to_array(new CsvDriver(ignoreEmptyRows: true)->read($path));
+        $rows = iterator_to_array((new CsvDriver(ignoreEmptyRows: true))->read($path));
 
         $this->assertCount(2, $rows);
         $this->assertSame(2, $rows[0]->line());

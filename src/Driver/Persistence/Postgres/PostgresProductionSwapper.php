@@ -50,6 +50,13 @@ final readonly class PostgresProductionSwapper
             return;
         }
 
+        if ($this->tryClearTableByDeletingReferencingRows($productionTable, $quotedProduction)) {
+            $this->copyStagingRows($productionTable, $quotedProduction, $quotedStaging);
+            $this->introspection->synchronizeSequences($productionTable);
+
+            return;
+        }
+
         if ($this->tryClearTable($quotedProduction, replicaRole: false)) {
             $this->copyStagingRows($productionTable, $quotedProduction, $quotedStaging);
             $this->introspection->synchronizeSequences($productionTable);
@@ -127,6 +134,25 @@ final readonly class PostgresProductionSwapper
         });
     }
 
+    private function tryClearTableByDeletingReferencingRows(string $productionTable, string $quotedProduction): bool
+    {
+        $referencingTables = $this->introspection->referencingTablesForDeletion($productionTable);
+
+        if ($referencingTables === [] && !$this->tableHasSelfReferencingForeignKey($productionTable)) {
+            return false;
+        }
+
+        return $this->attempt(function () use ($quotedProduction, $referencingTables): void {
+            foreach ($referencingTables as $table) {
+                $quoted = $this->identifiers->quoteQualified($table);
+                $this->pdo->exec(sprintf('LOCK TABLE %s IN ACCESS EXCLUSIVE MODE', $quoted));
+                $this->pdo->exec(sprintf('DELETE FROM %s', $quoted));
+            }
+
+            $this->pdo->exec(sprintf('DELETE FROM %s', $quotedProduction));
+        });
+    }
+
     private function tableHasSelfReferencingForeignKey(string $productionTable): bool
     {
         $tableName = $this->identifiers->basename($productionTable);
@@ -134,11 +160,11 @@ final readonly class PostgresProductionSwapper
         $statement = $this->pdo->query(sprintf(
             <<<'SQL'
             SELECT 1
-            FROM pg_constraint AS constraint
-            INNER JOIN pg_class AS referenced ON referenced.oid = constraint.confrelid
+            FROM pg_constraint AS fk
+            INNER JOIN pg_class AS referenced ON referenced.oid = fk.confrelid
             INNER JOIN pg_namespace AS referenced_ns ON referenced_ns.oid = referenced.relnamespace
-            WHERE constraint.contype = 'f'
-              AND constraint.conrelid = constraint.confrelid
+            WHERE fk.contype = 'f'
+              AND fk.conrelid = fk.confrelid
               AND referenced_ns.nspname = 'public'
               AND referenced.relname = %s
             LIMIT 1

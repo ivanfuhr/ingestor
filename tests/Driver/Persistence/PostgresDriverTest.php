@@ -1050,6 +1050,11 @@ SQL);
     #[Test]
     public function it_replaces_production_when_referenced_by_foreign_keys_without_superuser(): void
     {
+        if ($this->pdo->query("SELECT 1 FROM pg_roles WHERE rolname = 'ingestor_limited'")->fetchColumn() !== false) {
+            $this->pdo->exec('DROP OWNED BY ingestor_limited CASCADE');
+            $this->pdo->exec('DROP ROLE ingestor_limited');
+        }
+
         $this->pdo->exec(<<<'SQL'
 CREATE ROLE ingestor_limited LOGIN PASSWORD 'ingestor_limited'
 SQL);

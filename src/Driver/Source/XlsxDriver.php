@@ -10,6 +10,7 @@ use XMLReader;
 use ZipArchive;
 use Ivanfuhr\Ingestor\Context\ArrayRowContext;
 use Ivanfuhr\Ingestor\Contract\SourceDriver;
+use Ivanfuhr\Ingestor\Row\Row;
 
 final class XlsxDriver implements SourceDriver
 {
@@ -19,6 +20,7 @@ final class XlsxDriver implements SourceDriver
 
     public function __construct(
         ?XlsxSheet $sheet = null,
+        private readonly bool $ignoreEmptyRows = false,
     ) {
         $this->sheet = $sheet ?? XlsxSheet::first();
     }
@@ -290,7 +292,13 @@ final class XlsxDriver implements SourceDriver
                     continue;
                 }
 
-                yield new ArrayRowContext($lineNumber, $this->combine($headers, $cells));
+                $row = $this->combine($headers, $cells);
+
+                if ($this->ignoreEmptyRows && Row::dataIsEmpty($row)) {
+                    continue;
+                }
+
+                yield new ArrayRowContext($lineNumber, $row);
             }
         } finally {
             $reader->close();

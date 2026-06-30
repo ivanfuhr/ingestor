@@ -105,6 +105,41 @@ CSV);
         new SourceEncoding('NOT-A-REAL-ENCODING');
     }
 
+    #[Test]
+    public function it_keeps_blank_rows_by_default(): void
+    {
+        $path = $this->createCsv(<<<'CSV'
+cpf,name
+111,Ada
+,
+222,Bob
+CSV);
+
+        $rows = iterator_to_array((new CsvDriver())->read($path));
+
+        $this->assertCount(3, $rows);
+        $this->assertSame(['cpf' => '', 'name' => ''], $rows[1]->data());
+    }
+
+    #[Test]
+    public function it_ignores_blank_rows_when_configured(): void
+    {
+        $path = $this->createCsv(<<<'CSV'
+cpf,name
+111,Ada
+,
+222,Bob
+CSV);
+
+        $rows = iterator_to_array(new CsvDriver(ignoreEmptyRows: true)->read($path));
+
+        $this->assertCount(2, $rows);
+        $this->assertSame(2, $rows[0]->line());
+        $this->assertSame(['cpf' => '111', 'name' => 'Ada'], $rows[0]->data());
+        $this->assertSame(4, $rows[1]->line());
+        $this->assertSame(['cpf' => '222', 'name' => 'Bob'], $rows[1]->data());
+    }
+
     private function createCsv(string $contents): string
     {
         $path = tempnam(sys_get_temp_dir(), 'ingestor-csv-');

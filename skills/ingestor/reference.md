@@ -80,23 +80,26 @@ public function beforeRelease(ImportedImport $import): void
 }
 ```
 
-## XlsxDriver
+## CsvDriver / XlsxDriver
 
 ```php
+use Ivanfuhr\Ingestor\Driver\Source\CsvDriver;
 use Ivanfuhr\Ingestor\Driver\Source\XlsxDriver;
 use Ivanfuhr\Ingestor\Driver\Source\XlsxSheet;
 
-// First worksheet (default)
-new XlsxDriver();
+new CsvDriver();
+new CsvDriver(ignoreEmptyRows: true);
 
-// By name or zero-based index
+new XlsxDriver();
 new XlsxDriver(XlsxSheet::byName('Orders'));
 new XlsxDriver(XlsxSheet::byIndex(1));
+new XlsxDriver(ignoreEmptyRows: true);
+new XlsxDriver(XlsxSheet::byName('Orders'), ignoreEmptyRows: true);
 ```
 
-- Zero Composer dependencies — uses `ZipArchive` + `XMLReader` only
-- Header row → associative `RowContext` data; Excel row numbers for failures
-- Streams sheet XML incrementally via `zip://` (one row in memory at a time)
+- Header row → associative `RowContext` data; source line numbers for failures
+- `ignoreEmptyRows: true` skips rows where every field is `null`, `''`, or whitespace (disabled by default)
+- `XlsxDriver`: zero Composer dependencies — `ZipArchive` + `XMLReader`; streams sheet XML incrementally via `zip://`
 - Shared strings loaded into an index (sheet data itself stays streamed)
 - Excel serial dates returned as raw numbers; formulas read cached `<v>` values
 

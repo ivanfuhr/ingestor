@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `ignoreEmptyRows` option on `CsvDriver` and `XlsxDriver` to skip rows where every field is blank (`null`, `''`, or whitespace)
 - `DuplicateInBatch` enum for handling duplicate conflict keys within the same insert batch (`LastWins`, `FirstWins`, `Fail`)
 - Deduplication in `PostgresDriver` for `UpdateOnConflict` and `ReplaceOnConflict` to prevent PostgreSQL cardinality violations
 - Source driver: `CsvDriver`

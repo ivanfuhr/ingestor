@@ -487,6 +487,14 @@ use Ivanfuhr\Ingestor\Driver\Source\CsvDriver;
 $ingestor = Ingestor::make($persistence, new CsvDriver());
 ```
 
+Skip rows where every column is blank — common in CSV exports with trailing empty lines or `,,,` separators:
+
+```php
+new CsvDriver(ignoreEmptyRows: true);
+```
+
+A row is considered empty when all values are `null`, `''`, or whitespace only. Disabled by default.
+
 **Why:** Line numbers flow through the entire pipeline, enabling precise failure reporting back to the source file.
 
 ---
@@ -512,6 +520,10 @@ $ingestor
 // Select a worksheet by name or zero-based index
 new XlsxDriver(XlsxSheet::byName('Orders'));
 new XlsxDriver(XlsxSheet::byIndex(1));
+
+// Skip rows where every column is blank
+new XlsxDriver(ignoreEmptyRows: true);
+new XlsxDriver(XlsxSheet::byName('Orders'), ignoreEmptyRows: true);
 ```
 
 | Feature | Support |
@@ -521,6 +533,7 @@ new XlsxDriver(XlsxSheet::byIndex(1));
 | Booleans and formula cached values | Yes |
 | Excel serial dates | Returned as raw numbers |
 | Multiple sheets | One sheet per driver instance |
+| Ignore empty rows | Optional via `ignoreEmptyRows: true` |
 
 **Why:** Spreadsheet imports get the same DX and traceability as CSV — header-based associative rows and Excel row numbers for failure reporting — without pulling in PhpSpreadsheet or similar.
 

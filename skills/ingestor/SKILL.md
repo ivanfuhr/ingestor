@@ -147,6 +147,15 @@ Ingestor::test(CustomerImport::class)
 
 In-memory drivers live in `src/Testing/` (`InMemoryPersistenceDriver`, `InMemorySourceDriver`).
 
+## Source drivers
+
+`CsvDriver` and `XlsxDriver` accept `ignoreEmptyRows: true` to skip rows where every column is blank (`null`, `''`, or whitespace). Disabled by default.
+
+```php
+new CsvDriver(ignoreEmptyRows: true);
+new XlsxDriver(XlsxSheet::byName('Orders'), ignoreEmptyRows: true);
+```
+
 ## Code layout
 
 | Path | Contents |

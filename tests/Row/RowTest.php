@@ -83,6 +83,17 @@ final class RowTest extends TestCase
             $row->only(['cpf', 'name', 'missing']),
         );
     }
+
+    #[Test]
+    public function it_detects_empty_rows(): void
+    {
+        $this->assertTrue(Row::dataIsEmpty([]));
+        $this->assertTrue(Row::dataIsEmpty(['cpf' => '', 'name' => null]));
+        $this->assertTrue(Row::make(1, [])->isEmpty());
+        $this->assertTrue(Row::make(1, ['cpf' => '   ', 'name' => "\t"])->isEmpty());
+        $this->assertFalse(Row::make(1, ['cpf' => '111', 'name' => ''])->isEmpty());
+        $this->assertFalse(Row::make(1, ['active' => '0'])->isEmpty());
+    }
 }
 
 final class FailureWithLineTest extends TestCase

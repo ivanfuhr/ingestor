@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use RuntimeException;
 use Ivanfuhr\Ingestor\Context\ArrayRowContext;
 use Ivanfuhr\Ingestor\Contract\SourceDriver;
+use Ivanfuhr\Ingestor\Row\Row;
 
 final class CsvDriver implements SourceDriver
 {
@@ -15,6 +16,7 @@ final class CsvDriver implements SourceDriver
 
     public function __construct(
         ?SourceEncoding $encoding = null,
+        private readonly bool $ignoreEmptyRows = false,
     ) {
         $this->encoding = $encoding ?? SourceEncoding::utf8();
     }
@@ -52,7 +54,13 @@ final class CsvDriver implements SourceDriver
                     continue;
                 }
 
-                yield new ArrayRowContext($lineNumber, $this->combine($headers, $values));
+                $row = $this->combine($headers, $values);
+
+                if ($this->ignoreEmptyRows && Row::dataIsEmpty($row)) {
+                    continue;
+                }
+
+                yield new ArrayRowContext($lineNumber, $row);
             }
         } finally {
             fclose($handle);

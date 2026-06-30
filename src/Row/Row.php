@@ -163,4 +163,36 @@ final readonly class Row
     {
         return $this->data;
     }
+
+    public function isEmpty(): bool
+    {
+        return self::dataIsEmpty($this->data);
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    public static function dataIsEmpty(array $data): bool
+    {
+        if ($data === []) {
+            return true;
+        }
+
+        foreach ($data as $value) {
+            if (!self::isBlankValue($value)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static function isBlankValue(mixed $value): bool
+    {
+        if ($value === null || $value === '') {
+            return true;
+        }
+
+        return is_string($value) && trim($value) === '';
+    }
 }

@@ -18,6 +18,7 @@ final readonly class PostgresStageBootstrap
     public function __construct(
         private PDO $pdo,
         private PostgresIdentifier $identifiers,
+        private PostgresTableIntrospection $introspection,
     ) {
     }
 
@@ -41,8 +42,9 @@ final readonly class PostgresStageBootstrap
                     $quotedDataset,
                 ));
                 $this->pdo->exec(sprintf(
-                    'INSERT INTO %s SELECT * FROM %s',
+                    'INSERT INTO %s%s SELECT * FROM %s',
                     $quotedStagingTable,
+                    $this->introspection->insertOverridingSystemValueClause($stagingTable),
                     $quotedDataset,
                 ));
             } elseif ($datasetConfig->stageStrategy instanceof EmptyStage) {

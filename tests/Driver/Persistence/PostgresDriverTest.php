@@ -954,18 +954,7 @@ CREATE TABLE json_records (
 )
 SQL);
 
-        $payload = new class () {
-            public function toArray(): array
-            {
-                return ['count' => 2, 'tags' => ['a', 'b']];
-            }
-        };
-
-        $definition = new class ($payload) implements Definition {
-            public function __construct(private readonly object $payload)
-            {
-            }
-
+        $definition = new class () implements Definition {
             public function schema(): Schema|DatasetBuilder
             {
                 return Schema::make()
@@ -976,10 +965,17 @@ SQL);
 
             public function map(Row $row, Context $context): Dataset
             {
+                $payload = new class () {
+                    public function toArray(): array
+                    {
+                        return ['count' => 2, 'tags' => ['a', 'b']];
+                    }
+                };
+
                 return Dataset::make()->insert('json_records', [
                     'code' => $row->string('code'),
                     'metadata' => ['source' => $row->string('source')],
-                    'payload' => $this->payload,
+                    'payload' => $payload,
                 ]);
             }
         };

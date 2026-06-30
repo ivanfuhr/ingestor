@@ -30,21 +30,21 @@ final readonly class PostgresProductionSwapper
         $this->pdo->exec(sprintf('LOCK TABLE %s IN ACCESS EXCLUSIVE MODE', $quotedProduction));
 
         if ($this->tryTruncateTable($quotedProduction)) {
-            $this->copyStagingRows($quotedProduction, $quotedStaging);
+            $this->copyStagingRows($productionTable, $quotedProduction, $quotedStaging);
             $this->introspection->synchronizeSequences($productionTable);
 
             return;
         }
 
         if ($this->tryClearTable($quotedProduction, replicaRole: true)) {
-            $this->copyStagingRows($quotedProduction, $quotedStaging);
+            $this->copyStagingRows($productionTable, $quotedProduction, $quotedStaging);
             $this->introspection->synchronizeSequences($productionTable);
 
             return;
         }
 
         if ($this->tryClearTable($quotedProduction, replicaRole: false)) {
-            $this->copyStagingRows($quotedProduction, $quotedStaging);
+            $this->copyStagingRows($productionTable, $quotedProduction, $quotedStaging);
             $this->introspection->synchronizeSequences($productionTable);
 
             return;
@@ -56,11 +56,12 @@ final readonly class PostgresProductionSwapper
         ));
     }
 
-    private function copyStagingRows(string $quotedProduction, string $quotedStaging): void
+    private function copyStagingRows(string $productionTable, string $quotedProduction, string $quotedStaging): void
     {
         $this->pdo->exec(sprintf(
-            'INSERT INTO %s SELECT * FROM %s',
+            'INSERT INTO %s%s SELECT * FROM %s',
             $quotedProduction,
+            $this->introspection->insertOverridingSystemValueClause($productionTable),
             $quotedStaging,
         ));
     }

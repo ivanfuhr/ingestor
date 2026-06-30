@@ -148,6 +148,13 @@ final class PostgresTableIntrospection
         return false;
     }
 
+    public function insertOverridingSystemValueClause(string $table): string
+    {
+        return $this->generatedAlwaysIdentityColumns($table) !== []
+            ? ' OVERRIDING SYSTEM VALUE'
+            : '';
+    }
+
     /**
      * Omits blank identity values so PostgreSQL can auto-generate them.
      *

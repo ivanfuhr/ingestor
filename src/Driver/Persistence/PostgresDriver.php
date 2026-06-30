@@ -48,7 +48,7 @@ final readonly class PostgresDriver implements PersistenceDriver
 
         $this->identifiers = new PostgresIdentifier();
         $this->introspection = new PostgresTableIntrospection($this->pdo, $this->identifiers);
-        $this->stageBootstrap = new PostgresStageBootstrap($this->pdo, $this->identifiers);
+        $this->stageBootstrap = new PostgresStageBootstrap($this->pdo, $this->identifiers, $this->introspection);
         $this->stagingIngestor = new PostgresStagingIngestor(
             $this->pdo,
             $this->chunkSize,

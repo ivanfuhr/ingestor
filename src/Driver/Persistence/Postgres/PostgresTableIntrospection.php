@@ -9,8 +9,14 @@ use PDOException;
 
 final class PostgresTableIntrospection
 {
+    /** @var array<string, array<string, string>> */
+    private array $columnTypesCache = [];
+
     /** @var array<string, list<string>> */
-    private array $columnsCache = [];
+    private array $identityColumnsCache = [];
+
+    /** @var array<string, list<string>> */
+    private array $generatedAlwaysIdentityColumnsCache = [];
 
     public function __construct(
         private readonly PDO $pdo,
@@ -23,12 +29,26 @@ final class PostgresTableIntrospection
      */
     public function columns(string $table): array
     {
-        if (isset($this->columnsCache[$table])) {
-            return $this->columnsCache[$table];
+        return array_keys($this->columnTypes($table));
+    }
+
+    /**
+     * @return array<string, string> column name => PostgreSQL udt_name
+     */
+    public function columnTypes(string $table): array
+    {
+        if (isset($this->columnTypesCache[$table])) {
+            return $this->columnTypesCache[$table];
         }
 
         $statement = $this->pdo->query(sprintf(
-            'SELECT column_name FROM information_schema.columns WHERE table_name = %s ORDER BY ordinal_position',
+            <<<'SQL'
+            SELECT column_name, udt_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = %s
+            ORDER BY ordinal_position
+            SQL,
             $this->pdo->quote($this->identifiers->basename($table)),
         ));
 
@@ -36,10 +56,125 @@ final class PostgresTableIntrospection
             throw new PDOException(sprintf('Unable to resolve columns for table "%s".', $table));
         }
 
+        /** @var list<array{column_name: string, udt_name: string}> $rows */
+        $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
+
+        /** @var array<string, string> $types */
+        $types = [];
+
+        foreach ($rows as $row) {
+            $types[$row['column_name']] = $row['udt_name'];
+        }
+
+        return $this->columnTypesCache[$table] = $types;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function identityColumns(string $table): array
+    {
+        if (isset($this->identityColumnsCache[$table])) {
+            return $this->identityColumnsCache[$table];
+        }
+
+        $statement = $this->pdo->query(sprintf(
+            <<<'SQL'
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = %s
+              AND is_identity = 'YES'
+            ORDER BY ordinal_position
+            SQL,
+            $this->pdo->quote($this->identifiers->basename($table)),
+        ));
+
+        if ($statement === false) {
+            throw new PDOException(sprintf('Unable to resolve identity columns for table "%s".', $table));
+        }
+
         /** @var list<string> $columns */
         $columns = $statement->fetchAll(PDO::FETCH_COLUMN);
 
-        return $this->columnsCache[$table] = $columns;
+        return $this->identityColumnsCache[$table] = $columns;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function generatedAlwaysIdentityColumns(string $table): array
+    {
+        if (isset($this->generatedAlwaysIdentityColumnsCache[$table])) {
+            return $this->generatedAlwaysIdentityColumnsCache[$table];
+        }
+
+        $statement = $this->pdo->query(sprintf(
+            <<<'SQL'
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = %s
+              AND is_identity = 'YES'
+              AND identity_generation = 'ALWAYS'
+            ORDER BY ordinal_position
+            SQL,
+            $this->pdo->quote($this->identifiers->basename($table)),
+        ));
+
+        if ($statement === false) {
+            throw new PDOException(sprintf('Unable to resolve identity columns for table "%s".', $table));
+        }
+
+        /** @var list<string> $columns */
+        $columns = $statement->fetchAll(PDO::FETCH_COLUMN);
+
+        return $this->generatedAlwaysIdentityColumnsCache[$table] = $columns;
+    }
+
+    /**
+     * @param list<string> $columns
+     */
+    public function requiresOverridingSystemValue(string $table, array $columns): bool
+    {
+        $identityColumns = array_fill_keys($this->generatedAlwaysIdentityColumns($table), true);
+
+        foreach ($columns as $column) {
+            if (isset($identityColumns[$column])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Omits blank identity values so PostgreSQL can auto-generate them.
+     *
+     * Mirrors Laravel/Eloquent behavior where `id` is not sent when absent.
+     *
+     * @param array<string, mixed> $data
+     *
+     * @return array<string, mixed>
+     */
+    public function sanitizeInsertData(string $table, array $data): array
+    {
+        foreach ($this->identityColumns($table) as $column) {
+            if (!array_key_exists($column, $data)) {
+                continue;
+            }
+
+            if ($this->isBlankInsertValue($data[$column])) {
+                unset($data[$column]);
+            }
+        }
+
+        return $data;
+    }
+
+    private function isBlankInsertValue(mixed $value): bool
+    {
+        return $value === null || $value === '';
     }
 
     public function synchronizeSequences(string $productionTable): void

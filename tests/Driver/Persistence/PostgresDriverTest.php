@@ -831,6 +831,181 @@ CSV);
     }
 
     #[Test]
+    public function it_omits_blank_identity_values_like_laravel(): void
+    {
+        $this->pdo->exec('DROP TABLE IF EXISTS laravel_style_records CASCADE');
+        $this->pdo->exec(<<<'SQL'
+CREATE TABLE laravel_style_records (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL
+)
+SQL);
+
+        $definition = new class () implements Definition {
+            public function schema(): Schema|DatasetBuilder
+            {
+                return Schema::make()
+                    ->dataset('laravel_style_records')
+                        ->using(EmptyStage::class)
+                        ->commit();
+            }
+
+            public function map(Row $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('laravel_style_records', $row->toArray());
+            }
+        };
+
+        $csv = $this->createCsv(<<<'CSV'
+id,code,name
+,alpha,First
+,beta,Second
+CSV);
+
+        $ingestor = Ingestor::make(new PostgresDriver($this->pdo), new CsvDriver());
+
+        $result = $ingestor
+            ->for($definition::class)
+            ->from($csv)
+            ->import();
+
+        $this->assertFalse($result->hasFailures());
+
+        $result->release();
+
+        $rows = $this->pdo->query('SELECT code, name FROM laravel_style_records ORDER BY code')->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->assertSame([
+            ['code' => 'alpha', 'name' => 'First'],
+            ['code' => 'beta', 'name' => 'Second'],
+        ], $rows);
+
+        $this->pdo->exec('DROP TABLE IF EXISTS laravel_style_records CASCADE');
+    }
+
+    #[Test]
+    public function it_inserts_explicit_ids_into_generated_always_identity_columns(): void
+    {
+        $this->pdo->exec('DROP TABLE IF EXISTS identity_records CASCADE');
+        $this->pdo->exec(<<<'SQL'
+CREATE TABLE identity_records (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    label TEXT NOT NULL
+)
+SQL);
+
+        $definition = new class () implements Definition {
+            public function schema(): Schema|DatasetBuilder
+            {
+                return Schema::make()
+                    ->dataset('identity_records')
+                        ->using(EmptyStage::class)
+                        ->commit();
+            }
+
+            public function map(Row $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('identity_records', [
+                    'id' => (int) $row->string('id'),
+                    'code' => $row->string('code'),
+                    'label' => $row->string('label'),
+                ]);
+            }
+        };
+
+        $csv = $this->createCsv(<<<'CSV'
+id,code,label
+42,alpha,First
+43,beta,Second
+CSV);
+
+        $ingestor = Ingestor::make(new PostgresDriver($this->pdo), new CsvDriver());
+
+        $result = $ingestor
+            ->for($definition::class)
+            ->from($csv)
+            ->import();
+
+        $this->assertFalse($result->hasFailures());
+
+        $result->release();
+
+        $rows = $this->pdo->query('SELECT id, code, label FROM identity_records ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->assertSame([
+            ['id' => 42, 'code' => 'alpha', 'label' => 'First'],
+            ['id' => 43, 'code' => 'beta', 'label' => 'Second'],
+        ], $rows);
+
+        $this->pdo->exec('DROP TABLE IF EXISTS identity_records CASCADE');
+    }
+
+    #[Test]
+    public function it_encodes_jsonb_arrays_and_objects_with_to_array(): void
+    {
+        $this->pdo->exec('DROP TABLE IF EXISTS json_records CASCADE');
+        $this->pdo->exec(<<<'SQL'
+CREATE TABLE json_records (
+    code TEXT PRIMARY KEY,
+    metadata JSONB NOT NULL,
+    payload JSON NOT NULL
+)
+SQL);
+
+        $payload = new class () {
+            public function toArray(): array
+            {
+                return ['count' => 2, 'tags' => ['a', 'b']];
+            }
+        };
+
+        $definition = new class ($payload) implements Definition {
+            public function __construct(private readonly object $payload)
+            {
+            }
+
+            public function schema(): Schema|DatasetBuilder
+            {
+                return Schema::make()
+                    ->dataset('json_records')
+                        ->using(EmptyStage::class)
+                        ->commit();
+            }
+
+            public function map(Row $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('json_records', [
+                    'code' => $row->string('code'),
+                    'metadata' => ['source' => $row->string('source')],
+                    'payload' => $this->payload,
+                ]);
+            }
+        };
+
+        $csv = $this->createCsv("code,source\nitem-1,csv\n");
+
+        $ingestor = Ingestor::make(new PostgresDriver($this->pdo), new CsvDriver());
+
+        $result = $ingestor
+            ->for($definition::class)
+            ->from($csv)
+            ->import();
+
+        $this->assertFalse($result->hasFailures());
+
+        $result->release();
+
+        $row = $this->pdo->query("SELECT metadata, payload FROM json_records WHERE code = 'item-1'")->fetch(PDO::FETCH_ASSOC);
+
+        $this->assertSame(['source' => 'csv'], json_decode((string) $row['metadata'], true));
+        $this->assertSame(['count' => 2, 'tags' => ['a', 'b']], json_decode((string) $row['payload'], true));
+
+        $this->pdo->exec('DROP TABLE IF EXISTS json_records CASCADE');
+    }
+
+    #[Test]
     public function it_replaces_production_when_table_is_referenced_by_foreign_keys(): void
     {
         $this->pdo->exec(<<<'SQL'

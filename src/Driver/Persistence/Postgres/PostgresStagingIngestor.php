@@ -29,6 +29,8 @@ final class PostgresStagingIngestor
     /** @var array<string, int> */
     private array $tableRowCountCache = [];
 
+    private readonly PostgresBindValueNormalizer $bindValueNormalizer;
+
     public function __construct(
         private readonly PDO $pdo,
         private readonly int $chunkSize,
@@ -37,6 +39,7 @@ final class PostgresStagingIngestor
         private readonly PostgresTableIntrospection $introspection,
         private readonly ConflictRowDeduplicator $conflictRowDeduplicator = new ConflictRowDeduplicator(),
     ) {
+        $this->bindValueNormalizer = new PostgresBindValueNormalizer($this->introspection);
     }
 
     /**
@@ -54,6 +57,8 @@ final class PostgresStagingIngestor
         RowContext $rowContext,
         MetricsRecorder $metrics,
     ): array {
+        $data = $this->introspection->sanitizeInsertData($table, $data);
+
         if (!isset($buffers[$table])) {
             $buffers[$table] = new StagingInsertBuffer(
                 dataset: $dataset,
@@ -318,24 +323,7 @@ final class PostgresStagingIngestor
         }
 
         $pdoStatement = $this->prepareChunkedStatement($table, $columns, $length, $conflictStrategy);
-        $pdoStatement->execute($this->normalizeBindValues($values));
-    }
-
-    /**
-     * PDO treats execute() parameters as strings, so false becomes "" which PostgreSQL rejects.
-     *
-     * @param list<mixed> $values
-     *
-     * @return list<mixed>
-     */
-    private function normalizeBindValues(array $values): array
-    {
-        return array_map(
-            static fn (mixed $value): mixed => is_bool($value)
-                ? ($value ? 'true' : 'false')
-                : $value,
-            $values,
-        );
+        $pdoStatement->execute($this->bindValueNormalizer->normalize($table, $columns, $values));
     }
 
     /**
@@ -371,10 +359,15 @@ final class PostgresStagingIngestor
         $rowPlaceholder = '(' . implode(', ', array_fill(0, $columnCount, '?')) . ')';
         $placeholders = implode(', ', array_fill(0, $rowCount, $rowPlaceholder));
 
+        $overridingClause = $this->introspection->requiresOverridingSystemValue($table, $columns)
+            ? ' OVERRIDING SYSTEM VALUE'
+            : '';
+
         $sql = sprintf(
-            'INSERT INTO %s (%s) VALUES %s',
+            'INSERT INTO %s (%s)%s VALUES %s',
             $this->identifiers->quote($table),
             implode(', ', array_map($this->identifiers->quote(...), $columns)),
+            $overridingClause,
             $placeholders,
         );
 
@@ -408,6 +401,7 @@ final class PostgresStagingIngestor
         ));
         $tableColumns = $this->introspection->columns($table);
         $conflictColumnSet = array_fill_keys($conflictStrategy->columns(), true);
+        $identityColumnSet = array_fill_keys($this->introspection->identityColumns($table), true);
 
         $clause = match ($conflictStrategy->type()) {
             ConflictType::Ignore => sprintf(' ON CONFLICT (%s) DO NOTHING', $conflictColumns),
@@ -435,7 +429,10 @@ final class PostgresStagingIngestor
                         $this->identifiers->quote($column),
                         $this->identifiers->quote($column),
                     ),
-                    $tableColumns,
+                    array_filter(
+                        $tableColumns,
+                        static fn (string $column): bool => !isset($identityColumnSet[$column]),
+                    ),
                 )),
             ),
             ConflictType::Fail => '',

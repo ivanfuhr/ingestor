@@ -65,10 +65,10 @@ final readonly class ImportMetrics implements Metrics
     }
 
     /**
-     * @return iterable<DatasetMetrics>
+     * @return list<DatasetMetrics>
      */
-    public function datasets(): iterable
+    public function datasets(): array
     {
-        yield from $this->datasets;
+        return $this->datasets;
     }
 }

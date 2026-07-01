@@ -24,7 +24,7 @@ interface Metrics
     public function mutations(): int;
 
     /**
-     * @return iterable<DatasetMetrics>
+     * @return list<DatasetMetrics>
      */
-    public function datasets(): iterable;
+    public function datasets(): array;
 }

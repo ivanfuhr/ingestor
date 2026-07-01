@@ -107,7 +107,7 @@ final class MetricsTest extends TestCase
         $this->assertNotNull($metrics->finishedAt());
         $this->assertGreaterThanOrEqual(0, $metrics->duration()->seconds());
 
-        $datasets = iterator_to_array($metrics->datasets());
+        $datasets = $metrics->datasets();
         $this->assertCount(1, $datasets);
         $this->assertSame('customers', $datasets[0]->name());
         $this->assertSame(EmptyStage::class, $datasets[0]->stageStrategy());
@@ -146,7 +146,7 @@ final class MetricsTest extends TestCase
         $this->assertSame(1, $metrics->importedRows());
         $this->assertSame(1, $metrics->mutations());
 
-        $datasets = iterator_to_array($metrics->datasets());
+        $datasets = $metrics->datasets();
         $this->assertSame(1, $datasets[0]->persisted());
     }
 
@@ -209,7 +209,7 @@ final class MetricsTest extends TestCase
         $this->assertSame(1, $metrics->failedRows());
         $this->assertSame(0, $metrics->importedRows());
 
-        $datasets = iterator_to_array($metrics->datasets());
+        $datasets = $metrics->datasets();
         $this->assertSame(1, $datasets[0]->failures());
         $this->assertSame(0, $datasets[0]->persisted());
     }
@@ -318,7 +318,7 @@ final class MetricsTest extends TestCase
         $this->assertSame(499_812, $metrics->importedRows());
         $this->assertSame(188, $metrics->failedRows());
         $this->assertSame(842_195, $metrics->mutations());
-        $this->assertCount(3, iterator_to_array($metrics->datasets()));
+        $this->assertCount(3, $metrics->datasets());
     }
 
     #[Test]
@@ -360,7 +360,7 @@ final class MetricsTest extends TestCase
             ->from('ignored')
             ->import();
 
-        $datasets = iterator_to_array($result->metrics()->datasets(), preserve_keys: true);
+        $datasets = $result->metrics()->datasets();
         $this->assertCount(2, $datasets);
 
         $customers = $datasets[0];
@@ -427,7 +427,7 @@ final class MetricsTest extends TestCase
             ->from('ignored')
             ->import();
 
-        $datasets = iterator_to_array($result->metrics()->datasets(), preserve_keys: true);
+        $datasets = $result->metrics()->datasets();
         $this->assertCount(2, $datasets);
 
         $customers = $datasets[0];

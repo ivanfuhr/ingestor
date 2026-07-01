@@ -217,67 +217,6 @@ final class PostgresTableIntrospection
         return $tables;
     }
 
-    /**
-     * Returns referencing tables ordered for deletion (deepest dependents first).
-     *
-     * @return list<string> schema-qualified table names
-     */
-    public function referencingTablesForDeletion(string $table): array
-    {
-        $tableName = $this->identifiers->basename($table);
-
-        $statement = $this->pdo->query(sprintf(
-            <<<'SQL'
-            WITH RECURSIVE dependents AS (
-                SELECT
-                    referencing.oid AS relid,
-                    1 AS depth
-                FROM pg_constraint AS fk
-                INNER JOIN pg_class AS referenced ON referenced.oid = fk.confrelid
-                INNER JOIN pg_namespace AS referenced_ns ON referenced_ns.oid = referenced.relnamespace
-                INNER JOIN pg_class AS referencing ON referencing.oid = fk.conrelid
-                INNER JOIN pg_namespace AS referencing_ns ON referencing_ns.oid = referencing.relnamespace
-                WHERE fk.contype = 'f'
-                  AND referenced_ns.nspname = 'public'
-                  AND referenced.relname = %s
-
-                UNION
-
-                SELECT
-                    referencing.oid AS relid,
-                    dependents.depth + 1 AS depth
-                FROM pg_constraint AS fk
-                INNER JOIN pg_class AS referenced ON referenced.oid = fk.confrelid
-                INNER JOIN pg_namespace AS referenced_ns ON referenced_ns.oid = referenced.relnamespace
-                INNER JOIN pg_class AS referencing ON referencing.oid = fk.conrelid
-                INNER JOIN pg_namespace AS referencing_ns ON referencing_ns.oid = referencing.relnamespace
-                INNER JOIN dependents ON referenced.oid = dependents.relid
-                WHERE fk.contype = 'f'
-                  AND referenced_ns.nspname = 'public'
-            )
-            SELECT format('%%I.%%I', referencing_ns.nspname, referencing.relname) AS referencing_table
-            FROM (
-                SELECT relid, MAX(depth) AS depth
-                FROM dependents
-                GROUP BY relid
-            ) AS ordered
-            INNER JOIN pg_class AS referencing ON referencing.oid = ordered.relid
-            INNER JOIN pg_namespace AS referencing_ns ON referencing_ns.oid = referencing.relnamespace
-            ORDER BY ordered.depth DESC, referencing_table
-            SQL,
-            $this->pdo->quote($tableName),
-        ));
-
-        if ($statement === false) {
-            throw new PDOException(sprintf('Unable to resolve foreign key references for table "%s".', $table));
-        }
-
-        /** @var list<string> $tables */
-        $tables = $statement->fetchAll(PDO::FETCH_COLUMN);
-
-        return $tables;
-    }
-
     public function synchronizeSequences(string $productionTable): void
     {
         $tableName = $this->identifiers->basename($productionTable);

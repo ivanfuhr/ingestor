@@ -1048,7 +1048,7 @@ SQL);
     }
 
     #[Test]
-    public function it_replaces_production_when_referenced_by_foreign_keys_without_superuser(): void
+    public function it_fails_to_replace_production_when_referenced_by_foreign_keys_without_superuser(): void
     {
         if ($this->pdo->query("SELECT 1 FROM pg_roles WHERE rolname = 'ingestor_limited'")->fetchColumn() !== false) {
             $this->pdo->exec('DROP OWNED BY ingestor_limited CASCADE');
@@ -1100,17 +1100,15 @@ SQL);
 
         $ingestor = Ingestor::make(new PostgresDriver($limitedPdo), new CsvDriver());
 
-        $ingestor
+        $import = $ingestor
             ->for($definition::class)
             ->from($csv)
-            ->import()
-            ->release();
+            ->import();
 
-        $rows = $limitedPdo->query('SELECT document, name FROM customers ORDER BY document')->fetchAll(PDO::FETCH_ASSOC);
+        $this->expectException(PDOException::class);
+        $this->expectExceptionMessage('Unable to replace contents of table "customers"');
 
-        $this->assertSame([
-            ['document' => '222', 'name' => 'New Customer'],
-        ], $rows);
+        $import->release();
 
         $this->pdo->exec('DROP OWNED BY ingestor_limited CASCADE');
         $this->pdo->exec('DROP ROLE ingestor_limited');

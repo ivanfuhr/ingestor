@@ -27,8 +27,6 @@ final readonly class PostgresProductionSwapper
         $quotedProduction = $this->identifiers->quote($productionTable);
         $quotedStaging = $this->identifiers->quote($stagingTable);
 
-        $this->pdo->exec(sprintf('LOCK TABLE %s IN ACCESS EXCLUSIVE MODE', $quotedProduction));
-
         if ($this->tryTruncateTable($quotedProduction)) {
             $this->copyStagingRows($productionTable, $quotedProduction, $quotedStaging);
             $this->introspection->synchronizeSequences($productionTable);
@@ -50,13 +48,6 @@ final readonly class PostgresProductionSwapper
             return;
         }
 
-        if ($this->tryClearTableByDeletingReferencingRows($productionTable, $quotedProduction)) {
-            $this->copyStagingRows($productionTable, $quotedProduction, $quotedStaging);
-            $this->introspection->synchronizeSequences($productionTable);
-
-            return;
-        }
-
         if ($this->tryClearTable($quotedProduction, replicaRole: false)) {
             $this->copyStagingRows($productionTable, $quotedProduction, $quotedStaging);
             $this->introspection->synchronizeSequences($productionTable);
@@ -65,8 +56,9 @@ final readonly class PostgresProductionSwapper
         }
 
         throw new PDOException(sprintf(
-            'Unable to replace contents of table "%s". The table may be referenced by foreign keys from other tables, '
-            . 'or the database role may lack permission to bypass them (requires table ownership or superuser).',
+            'Unable to replace contents of table "%s". The table is referenced by foreign keys from other tables. '
+            . 'The database role must be able to bypass FK checks (superuser, or permission to set session_replication_role). '
+            . 'Importing referenced tables in the same job does not remove this requirement.',
             $productionTable,
         ));
     }
@@ -84,6 +76,7 @@ final readonly class PostgresProductionSwapper
     private function tryTruncateTable(string $quotedProduction): bool
     {
         return $this->attempt(function () use ($quotedProduction): void {
+            $this->pdo->exec(sprintf('LOCK TABLE %s IN ACCESS EXCLUSIVE MODE', $quotedProduction));
             $this->pdo->exec(sprintf('TRUNCATE %s', $quotedProduction));
         });
     }
@@ -91,6 +84,8 @@ final readonly class PostgresProductionSwapper
     private function tryClearTable(string $quotedProduction, bool $replicaRole): bool
     {
         return $this->attempt(function () use ($quotedProduction, $replicaRole): void {
+            $this->pdo->exec(sprintf('LOCK TABLE %s IN EXCLUSIVE MODE', $quotedProduction));
+
             if ($replicaRole) {
                 $this->pdo->exec("SET session_replication_role = 'replica'");
             }
@@ -119,7 +114,7 @@ final readonly class PostgresProductionSwapper
         return $this->attempt(function () use ($quotedProduction, $tablesToDisable): void {
             foreach ($tablesToDisable as $table) {
                 $quoted = $this->identifiers->quoteQualified($table);
-                $this->pdo->exec(sprintf('LOCK TABLE %s IN ACCESS EXCLUSIVE MODE', $quoted));
+                $this->pdo->exec(sprintf('LOCK TABLE %s IN EXCLUSIVE MODE', $quoted));
                 $this->pdo->exec(sprintf('ALTER TABLE %s DISABLE TRIGGER ALL', $quoted));
             }
 
@@ -131,25 +126,6 @@ final readonly class PostgresProductionSwapper
                     $this->pdo->exec(sprintf('ALTER TABLE %s ENABLE TRIGGER ALL', $quoted));
                 }
             }
-        });
-    }
-
-    private function tryClearTableByDeletingReferencingRows(string $productionTable, string $quotedProduction): bool
-    {
-        $referencingTables = $this->introspection->referencingTablesForDeletion($productionTable);
-
-        if ($referencingTables === [] && !$this->tableHasSelfReferencingForeignKey($productionTable)) {
-            return false;
-        }
-
-        return $this->attempt(function () use ($quotedProduction, $referencingTables): void {
-            foreach ($referencingTables as $table) {
-                $quoted = $this->identifiers->quoteQualified($table);
-                $this->pdo->exec(sprintf('LOCK TABLE %s IN ACCESS EXCLUSIVE MODE', $quoted));
-                $this->pdo->exec(sprintf('DELETE FROM %s', $quoted));
-            }
-
-            $this->pdo->exec(sprintf('DELETE FROM %s', $quotedProduction));
         });
     }
 

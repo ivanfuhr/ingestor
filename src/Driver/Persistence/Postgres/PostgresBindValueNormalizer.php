@@ -42,7 +42,7 @@ final class PostgresBindValueNormalizer
     private function normalizeValue(mixed $value, ?string $type): mixed
     {
         if (is_bool($value)) {
-            return $value ? 'true' : 'false';
+            return $value ? '1' : '0';
         }
 
         if ($type !== null && in_array($type, ['json', 'jsonb'], true)) {

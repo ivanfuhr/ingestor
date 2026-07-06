@@ -177,6 +177,69 @@ CSV);
     }
 
     #[Test]
+    public function it_synchronizes_staging_sequences_when_sequence_lags_behind_max_id(): void
+    {
+        $this->pdo->exec('DROP TABLE IF EXISTS associados_contas CASCADE');
+        $this->pdo->exec(<<<'SQL'
+CREATE TABLE associados_contas (
+    id SERIAL PRIMARY KEY,
+    conta_id TEXT NOT NULL UNIQUE,
+    associado_id TEXT NOT NULL
+)
+SQL);
+
+        for ($id = 1; $id <= 685; ++$id) {
+            $this->pdo->exec(sprintf(
+                "INSERT INTO associados_contas (id, conta_id, associado_id) VALUES (%d, 'conta-%d', 'assoc-%d')",
+                $id,
+                $id,
+                $id,
+            ));
+        }
+
+        $this->pdo->exec("SELECT setval(pg_get_serial_sequence('associados_contas', 'id'), 5, false)");
+
+        $definition = new class () implements Definition {
+            public function schema(): Schema|DatasetBuilder
+            {
+                return Schema::make()
+                    ->dataset('associados_contas')
+                        ->using(PrefilledStage::class)
+                        ->commit();
+            }
+
+            public function map(Row $row, Context $context): Dataset
+            {
+                return Dataset::make()->insert('associados_contas', [
+                    'conta_id' => $row->string('conta_id'),
+                    'associado_id' => $row->string('associado_id'),
+                ]);
+            }
+        };
+
+        $csv = $this->createCsv("conta_id,associado_id\nconta-new,new-assoc\n");
+
+        $ingestor = Ingestor::make(new PostgresDriver($this->pdo), new CsvDriver());
+
+        $result = $ingestor
+            ->for($definition::class)
+            ->from($csv)
+            ->import();
+
+        $this->assertFalse($result->hasFailures());
+
+        $result->release();
+
+        $newRow = $this->pdo->query("SELECT id, conta_id FROM associados_contas WHERE conta_id = 'conta-new'")->fetch(PDO::FETCH_ASSOC);
+
+        $this->assertNotFalse($newRow);
+        $this->assertGreaterThan(685, (int) $newRow['id']);
+        $this->assertSame('conta-new', $newRow['conta_id']);
+
+        $this->pdo->exec('DROP TABLE IF EXISTS associados_contas CASCADE');
+    }
+
+    #[Test]
     public function it_synchronizes_staging_sequences_after_prefilled_stage_copy(): void
     {
         $this->pdo->exec('DROP TABLE IF EXISTS associados_contas CASCADE');

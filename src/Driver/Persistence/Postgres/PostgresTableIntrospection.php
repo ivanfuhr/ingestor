@@ -217,21 +217,38 @@ final class PostgresTableIntrospection
         return $tables;
     }
 
+    /**
+     * Advances serial sequences referenced by column defaults to at least MAX(column).
+     *
+     * Sequences are resolved from DEFAULT expressions (`nextval(...)`) rather than
+     * `pg_get_serial_sequence()`, which only reports ownership-linked sequences and
+     * returns NULL for staging tables created via `CREATE TABLE ... (LIKE ... INCLUDING ALL)`.
+     *
+     * Staging tables created from production copy the same sequence object referenced
+     * in the DEFAULT clause. Calling `setval()` here therefore adjusts that sequence
+     * globally (including production), which is desirable to avoid concurrent imports
+     * reusing surrogate keys already present in prefilled staging data.
+     */
     public function synchronizeSequences(string $productionTable): void
     {
         $tableName = $this->identifiers->basename($productionTable);
 
         $statement = $this->pdo->query(sprintf(
             <<<'SQL'
-            SELECT a.attname AS column_name
+            SELECT a.attname AS column_name,
+                   (regexp_match(
+                       pg_get_expr(ad.adbin, ad.adrelid),
+                       'nextval\(''([^'']+)''(?:::regclass)?\)'
+                   ))[1] AS sequence_name
             FROM pg_class AS c
             INNER JOIN pg_namespace AS n ON n.oid = c.relnamespace
             INNER JOIN pg_attribute AS a ON a.attrelid = c.oid
+            INNER JOIN pg_attrdef AS ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
             WHERE n.nspname = 'public'
               AND c.relname = %s
               AND a.attnum > 0
               AND NOT a.attisdropped
-              AND pg_get_serial_sequence(format('%%I.%%I', n.nspname, c.relname), a.attname) IS NOT NULL
+              AND pg_get_expr(ad.adbin, ad.adrelid) LIKE 'nextval(%%'
             SQL,
             $this->pdo->quote($tableName),
         ));
@@ -240,22 +257,26 @@ final class PostgresTableIntrospection
             return;
         }
 
-        $quotedProduction = $this->identifiers->quote($productionTable);
-        $qualifiedTable = $this->pdo->quote('public.' . $tableName);
+        $quotedTable = $this->identifiers->quote($productionTable);
 
-        /** @var list<string> $columns */
-        $columns = $statement->fetchAll(PDO::FETCH_COLUMN);
+        /** @var list<array{column_name: string, sequence_name: string|null}> $rows */
+        $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
 
-        foreach ($columns as $column) {
-            $quotedColumn = $this->identifiers->quote($column);
+        foreach ($rows as $row) {
+            $sequenceName = $row['sequence_name'];
+
+            if ($sequenceName === null || $sequenceName === '') {
+                continue;
+            }
+
+            $quotedColumn = $this->identifiers->quote($row['column_name']);
 
             $this->pdo->exec(sprintf(
-                'SELECT setval(pg_get_serial_sequence(%s, %s), COALESCE((SELECT MAX(%s) FROM %s), 1), (SELECT COUNT(*) > 0 FROM %s))',
-                $qualifiedTable,
-                $this->pdo->quote($column),
+                'SELECT setval(to_regclass(%s), COALESCE((SELECT MAX(%s) FROM %s), 1), (SELECT COUNT(*) > 0 FROM %s))',
+                $this->pdo->quote($sequenceName),
                 $quotedColumn,
-                $quotedProduction,
-                $quotedProduction,
+                $quotedTable,
+                $quotedTable,
             ));
         }
     }

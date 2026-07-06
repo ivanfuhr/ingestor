@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `PrefilledStage::withoutSequenceSync()` to opt out of staging sequence synchronization when every insert provides an explicit surrogate key
+- `DatasetBuilder::using()` now accepts `StageStrategy` instances in addition to class names (e.g. `->using(PrefilledStage::withoutSequenceSync())`)
 - `ignoreEmptyRows` option on `CsvDriver` and `XlsxDriver` to skip rows where every field is blank (`null`, `''`, or whitespace)
 - `DuplicateInBatch` enum for handling duplicate conflict keys within the same insert batch (`LastWins`, `FirstWins`, `Fail`)
 - Deduplication in `PostgresDriver` for `UpdateOnConflict` and `ReplaceOnConflict` to prevent PostgreSQL cardinality violations
@@ -26,3 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Testing utilities via `Ingestor::test()` with fluent assertions
 - Conflict strategies: `UpdateOnConflict`, `IgnoreOnConflict`, `ReplaceOnConflict`, `FailOnConflict`
 - Stage strategies: `EmptyStage`, `PrefilledStage`
+
+### Fixed
+
+- `PrefilledStage` with `PostgresDriver` now synchronizes serial/identity sequences on staging tables after copying production data, preventing duplicate primary key violations when new rows omit the surrogate key

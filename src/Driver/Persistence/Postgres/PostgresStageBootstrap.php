@@ -47,6 +47,7 @@ final readonly class PostgresStageBootstrap
                     $this->introspection->insertOverridingSystemValueClause($stagingTable),
                     $quotedDataset,
                 ));
+                $this->introspection->synchronizeSequences($stagingTable);
             } elseif ($datasetConfig->stageStrategy instanceof EmptyStage) {
                 $sql = sprintf(
                     'CREATE UNLOGGED TABLE %s (LIKE %s INCLUDING ALL)',

@@ -116,6 +116,7 @@ new PostgresDriver(
 - Introspects production tables to build matching staging tables
 - Applies Schema conflict strategies via `ON CONFLICT`
 - Deduplicates duplicate conflict keys within each insert batch for `UpdateOnConflict` / `ReplaceOnConflict` (default `DuplicateInBatch::LastWins`)
+- `PrefilledStage` synchronizes staging serial/identity sequences after prefill; use `PrefilledStage::withoutSequenceSync()` when inserts always provide explicit IDs
 - Staging + atomic swap enables safe rollback window
 
 ## Testing assertions

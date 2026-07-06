@@ -78,6 +78,16 @@ final class CustomerImport implements Definition
 | `EmptyStage` | Dataset starts empty |
 | `PrefilledStage` | Copy existing production data into stage (incremental updates) |
 
+With `PostgresDriver`, `PrefilledStage` synchronizes staging serial/identity sequences after the prefill copy so inserts that omit the surrogate key do not reuse IDs already present in the copied data.
+
+When every insert provides an explicit surrogate key, opt out with:
+
+```php
+->using(PrefilledStage::withoutSequenceSync())
+```
+
+`DatasetBuilder::using()` accepts a class name (`PrefilledStage::class`) or a configured instance.
+
 ### Conflict strategies
 
 `UpdateOnConflict`, `IgnoreOnConflict`, `ReplaceOnConflict`, `FailOnConflict` — all via `::by('column')`. Applied by persistence driver (`ON CONFLICT` in Postgres).

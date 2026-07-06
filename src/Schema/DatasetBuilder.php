@@ -22,11 +22,11 @@ final class DatasetBuilder
     }
 
     /**
-     * @param class-string<StageStrategy> $stageStrategyClass
+     * @param class-string<StageStrategy>|StageStrategy $stageStrategy
      */
-    public function using(string $stageStrategyClass): self
+    public function using(string|StageStrategy $stageStrategy): self
     {
-        $this->stageStrategy = new $stageStrategyClass();
+        $this->stageStrategy = is_string($stageStrategy) ? new $stageStrategy() : $stageStrategy;
 
         return $this;
     }

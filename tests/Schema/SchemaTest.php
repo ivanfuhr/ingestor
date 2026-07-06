@@ -29,9 +29,24 @@ final class SchemaTest extends TestCase
 
         $this->assertArrayHasKey('customers', $datasets);
         $this->assertInstanceOf(PrefilledStage::class, $datasets['customers']->stageStrategy);
+        $this->assertTrue($datasets['customers']->stageStrategy->synchronizeSequences());
         $this->assertSame(['document'], $datasets['customers']->conflictStrategy?->columns());
 
         $this->assertArrayHasKey('addresses', $datasets);
         $this->assertInstanceOf(EmptyStage::class, $datasets['addresses']->stageStrategy);
+    }
+
+    #[Test]
+    public function it_accepts_configured_stage_strategy_instances(): void
+    {
+        $schema = Schema::make()
+            ->dataset('customers')
+                ->using(PrefilledStage::withoutSequenceSync())
+                ->commit();
+
+        $stageStrategy = $schema->datasets()['customers']->stageStrategy;
+
+        $this->assertInstanceOf(PrefilledStage::class, $stageStrategy);
+        $this->assertFalse($stageStrategy->synchronizeSequences());
     }
 }

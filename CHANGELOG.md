@@ -31,4 +31,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `synchronizeSequences()` now advances staging sequences for `GENERATED ... AS IDENTITY` columns (via `pg_get_serial_sequence`), not only `SERIAL`/`DEFAULT nextval(...)` columns — `CREATE TABLE ... (LIKE ... INCLUDING ALL)` creates a fresh identity sequence that otherwise restarts at 1 and collides with prefilled IDs
 - `PrefilledStage` with `PostgresDriver` now synchronizes serial/identity sequences on staging tables after copying production data, preventing duplicate primary key violations when new rows omit the surrogate key

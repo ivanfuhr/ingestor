@@ -218,16 +218,21 @@ final class PostgresTableIntrospection
     }
 
     /**
-     * Advances serial sequences referenced by column defaults to at least MAX(column).
+     * Advances serial/identity sequences to at least MAX(column).
      *
-     * Sequences are resolved from DEFAULT expressions (`nextval(...)`) rather than
-     * `pg_get_serial_sequence()`, which only reports ownership-linked sequences and
-     * returns NULL for staging tables created via `CREATE TABLE ... (LIKE ... INCLUDING ALL)`.
+     * Serial columns are resolved from DEFAULT expressions (`nextval(...)`) rather
+     * than `pg_get_serial_sequence()`, which only reports ownership-linked sequences
+     * and returns NULL for staging tables created via
+     * `CREATE TABLE ... (LIKE ... INCLUDING ALL)` that share the production sequence.
      *
-     * Staging tables created from production copy the same sequence object referenced
-     * in the DEFAULT clause. Calling `setval()` here therefore adjusts that sequence
-     * globally (including production), which is desirable to avoid concurrent imports
-     * reusing surrogate keys already present in prefilled staging data.
+     * Identity columns do not expose a `nextval(...)` DEFAULT. `LIKE ... INCLUDING ALL`
+     * (via `INCLUDING IDENTITY`) creates a new sequence owned by the staging column,
+     * which starts at 1 even after production rows are copied. Those sequences are
+     * resolved with `pg_get_serial_sequence()` on the staging table itself.
+     *
+     * For shared serial sequences, `setval()` adjusts the sequence globally (including
+     * production), which avoids concurrent imports reusing surrogate keys already
+     * present in prefilled staging data. Identity staging sequences are independent.
      */
     public function synchronizeSequences(string $productionTable): void
     {
@@ -236,19 +241,28 @@ final class PostgresTableIntrospection
         $statement = $this->pdo->query(sprintf(
             <<<'SQL'
             SELECT a.attname AS column_name,
-                   (regexp_match(
-                       pg_get_expr(ad.adbin, ad.adrelid),
-                       'nextval\(''([^'']+)''(?:::regclass)?\)'
-                   ))[1] AS sequence_name
+                   COALESCE(
+                       (regexp_match(
+                           pg_get_expr(ad.adbin, ad.adrelid),
+                           'nextval\(''([^'']+)''(?:::regclass)?\)'
+                       ))[1],
+                       pg_get_serial_sequence(format('%%I.%%I', n.nspname, c.relname), a.attname)
+                   ) AS sequence_name
             FROM pg_class AS c
             INNER JOIN pg_namespace AS n ON n.oid = c.relnamespace
             INNER JOIN pg_attribute AS a ON a.attrelid = c.oid
-            INNER JOIN pg_attrdef AS ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
+            LEFT JOIN pg_attrdef AS ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
             WHERE n.nspname = 'public'
               AND c.relname = %s
               AND a.attnum > 0
               AND NOT a.attisdropped
-              AND pg_get_expr(ad.adbin, ad.adrelid) LIKE 'nextval(%%'
+              AND (
+                  a.attidentity IN ('a', 'd')
+                  OR (
+                      ad.adbin IS NOT NULL
+                      AND pg_get_expr(ad.adbin, ad.adrelid) LIKE 'nextval(%%'
+                  )
+              )
             SQL,
             $this->pdo->quote($tableName),
         ));
